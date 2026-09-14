@@ -55,6 +55,11 @@ more forwards. To keep that from compounding to 9, the consistency term is
 computed only at `rate == 1` (the canonical scale), so per-step cost is about
 1.6x the baseline rather than 3x.
 
+STOCHASTIC DEPTH: pvt_v2_b2 is built with drop_path_rate=0.1, so each forward
+in train() mode samples an independent depth mask. Pass --drop_path 0 for any
+FCT run (and the same value on the no-FCT arm) or the consistency term mostly
+measures that noise. See the flag's help text.
+
 MEMORY is the binding constraint, not time. Every FCT forward keeps its
 autograd graph alive until the single backward, so peak memory scales with the
 NUMBER OF LIVE GRAPHS, not with the number of passes. With both flips that is
@@ -62,13 +67,18 @@ NUMBER OF LIVE GRAPHS, not with the number of passes. With both flips that is
 order and apply the same setting to BOTH arms, or they stop being comparable:
 
     1. --amp 1        mixed precision; roughly halves activation memory
-    2. --fct_sub 8    consistency on half the batch; supervised loss untouched
-    3. --fct_vflip 0  one flip instead of two; 2 live graphs instead of 3
-    4. --batchsize 8  last resort -- this changes the recipe itself
+    2. --fct_vflip 0  one flip instead of two; 2 live graphs instead of 3
+    3. --batchsize 8  changes the recipe, so apply it to both arms
+    4. --fct_sub 8    LAST resort, see the caveat below
 
---fct_sub is the one to prefer over --batchsize: it shrinks only the flip
-forwards, leaving the supervised loss and the effective batch size exactly as
-the baseline sees them.
+--fct_sub caveat: the decoder contains BatchNorm, and in train() mode BN
+normalises using the CURRENT batch's statistics. Slicing images[:n] for the
+flipped forwards means they are normalised over n samples while the target
+p_o was normalised over the full batch, so the MSE picks up a BN-statistics
+mismatch on top of the flip difference. (Flipping itself is safe: a spatial
+flip permutes H and W and leaves per-channel statistics identical.) Prefer
+--amp and --fct_vflip first; reach for --fct_sub only if those are not enough,
+and keep n as large as possible.
 
 USAGE
 -----
@@ -268,8 +278,13 @@ def train(train_loader, model, optimizer, epoch, opt, state):
             print(msg)
 
     os.makedirs(opt.train_save, exist_ok=True)
-    torch.save(model.state_dict(), os.path.join(opt.train_save, '{}PolypPVT.pth'.format(epoch)))
+    torch.save(model.state_dict(), os.path.join(opt.train_save, 'last.pth'))
+    if opt.save_every_epoch:
+        torch.save(model.state_dict(),
+                   os.path.join(opt.train_save, '{}PolypPVT.pth'.format(epoch)))
 
+    if opt.eval_every > 1 and epoch % opt.eval_every != 0:
+        return
     scores, meandice = evaluate_all(model, opt.test_path)
     for name, d in scores.items():
         logging.info('epoch: {}, dataset: {}, dice: {}'.format(epoch, name, d))
@@ -279,8 +294,6 @@ def train(train_loader, model, optimizer, epoch, opt, state):
     if meandice > state['best']:
         state['best'] = meandice
         torch.save(model.state_dict(), os.path.join(opt.train_save, 'PolypPVT.pth'))
-        torch.save(model.state_dict(),
-                   os.path.join(opt.train_save, '{}PolypPVT-best.pth'.format(epoch)))
         print('#' * 30, 'best', meandice)
         logging.info('#' * 30 + 'best:{}'.format(meandice))
 
@@ -329,13 +342,57 @@ if __name__ == '__main__':
                         help='1 = mixed precision. Apply to BOTH arms or they differ '
                              'by more than the thing being measured')
 
+    # --- stochastic depth ---
+    # pvt_v2_b2 is constructed with drop_path_rate=0.1, so in train() mode every
+    # forward samples an INDEPENDENT stochastic-depth mask across its 16 blocks.
+    # The consistency term compares f(x) against unflip(f(flip x)); with
+    # DropPath live those two differ by the flip non-equivariance we want to
+    # measure AND by two independent depth masks, which is pure noise. Set this
+    # to 0 for any FCT run, and use the same value on the no-FCT arm.
+    parser.add_argument('--drop_path', type=float, default=0.1,
+                        help='stochastic depth rate; 0.1 = stock. USE 0 WITH --fct')
+
+    # --- housekeeping ---
+    parser.add_argument('--save_every_epoch', type=int, default=0,
+                        help='1 = keep a checkpoint per epoch (~100MB x epochs). '
+                             'Default keeps only best + last')
+    parser.add_argument('--eval_every', type=int, default=1,
+                        help='evaluate the 5 test sets every N epochs')
+
     opt = parser.parse_args()
 
     logging.basicConfig(filename='train_log_noaug.log',
                         format='[%(asctime)s-%(filename)s-%(levelname)s:%(message)s]',
                         level=logging.INFO, filemode='a', datefmt='%Y-%m-%d %I:%M:%S %p')
 
+    # Preflight: fail now with a clear message rather than after the data loads.
+    _pre = './pretrained_pth/pvt_v2_b2.pth'
+    if not os.path.isfile(_pre):
+        raise FileNotFoundError(
+            'Missing backbone weights at {} -- PolypPVT.__init__ hardcodes this '
+            'path and will crash on construction.'.format(_pre))
+    for _d in ('{}/images/'.format(opt.train_path), '{}/masks/'.format(opt.train_path)):
+        if not os.path.isdir(_d):
+            raise FileNotFoundError('Missing training directory: {}'.format(_d))
+    for _s in TESTSETS:
+        _d = os.path.join(opt.test_path, _s, 'masks')
+        if not os.path.isdir(_d):
+            raise FileNotFoundError('Missing test directory: {}'.format(_d))
+
     model = PolypPVT().cuda()
+
+    # Stochastic depth. Must be 0 for FCT to measure flip non-equivariance
+    # rather than depth-mask noise; must match across arms either way.
+    model.backbone.reset_drop_path(opt.drop_path)
+    if opt.fct and opt.drop_path > 0:
+        print('!' * 78)
+        print('WARNING: --fct 1 with --drop_path {:.3f}.'.format(opt.drop_path))
+        print('  Stochastic depth is active, so f(x) and f(flip x) use different')
+        print('  random depth masks and the consistency term will be dominated by')
+        print('  that noise rather than by flip non-equivariance.')
+        print('  Re-run with --drop_path 0 (on BOTH arms).')
+        print('!' * 78)
+
     params = model.parameters()
     if opt.optimizer == 'AdamW':
         optimizer = torch.optim.AdamW(params, opt.lr, weight_decay=1e-4)
@@ -353,10 +410,20 @@ if __name__ == '__main__':
                               trainsize=opt.trainsize, augmentation=False)
 
     print('#' * 20, 'Start Training (no orientation augmentation)', '#' * 20)
-    print('multiscale:', bool(opt.multiscale), '| amp:', bool(opt.amp),
-          '| FCT:', bool(opt.fct),
-          ('(weight %.3f, vflip %s, warmup %d)' % (opt.fct_weight, bool(opt.fct_vflip),
-                                                   opt.fct_warmup_iters)) if opt.fct else '')
+    print('AUGMENTATION IN EFFECT')
+    print('  orientation (flip/rotate) : OFF  (hard-wired, not configurable)')
+    print('  photometric               : OFF  (this repo has none)')
+    print('  multi-scale [0.75,1,1.25] : {}'.format('ON' if opt.multiscale else 'OFF'))
+    print('  stochastic depth          : {:.3f}'.format(opt.drop_path))
+    print('TRAINING')
+    print('  batchsize {}  trainsize {}  amp {}  epochs {}'.format(
+        opt.batchsize, opt.trainsize, bool(opt.amp), opt.epoch))
+    if opt.fct:
+        print('  FCT consistency-only: weight {:.3f}, vflip {}, warmup {}, sub {}'.format(
+            opt.fct_weight, bool(opt.fct_vflip), opt.fct_warmup_iters,
+            opt.fct_sub or 'full batch'))
+    else:
+        print('  FCT: off')
 
     state = {'best': 0.0, 'iter': 0, 'total_step': len(train_loader),
              'scaler': GradScaler() if opt.amp else None}
