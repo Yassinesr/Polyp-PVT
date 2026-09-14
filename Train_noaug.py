@@ -517,6 +517,17 @@ if __name__ == '__main__':
     print('  stochastic depth          : {:.3f}{}'.format(
         opt.drop_path,
         '  (mask shared across views)' if (opt.fct and opt.fct_sync_rng) else ''))
+    print('DATA')
+    _n_img = len([f for f in os.listdir(image_root)
+                  if f.lower().endswith(('.jpg', '.png'))])
+    _n_use = len(train_loader.dataset)
+    print('  train images on disk       : {}'.format(_n_img))
+    print('  usable pairs after filter  : {}{}'.format(
+        _n_use, '' if _n_use == _n_img else '   <-- filter_files dropped {}'.format(_n_img - _n_use)))
+    if _n_img != 1450:
+        print('  !! the standard Polyp-PVT / PraNet split is 1450 images')
+        print('     (900 Kvasir + 550 CVC-ClinicDB). Results are NOT comparable')
+        print('     to the released checkpoint, which was trained on the full set.')
     print('TRAINING')
     print('  batchsize {}  trainsize {}  amp {}  epochs {}'.format(
         opt.batchsize, opt.trainsize, bool(opt.amp), opt.epoch))
