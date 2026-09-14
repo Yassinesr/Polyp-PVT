@@ -48,12 +48,27 @@ clashes with FCT+TTA.
    off changes the recipe substantially and will lower the baseline, so keep
    it on unless scale is the thing being studied.
 
-COST NOTE
----------
+COST AND MEMORY
+---------------
 Multi-scale already costs 3 forward/backward passes per batch. FCT adds two
 more forwards. To keep that from compounding to 9, the consistency term is
-computed only at `rate == 1` (the canonical scale). Reported per-step cost is
-therefore ~1.6x the baseline, not 3x.
+computed only at `rate == 1` (the canonical scale), so per-step cost is about
+1.6x the baseline rather than 3x.
+
+MEMORY is the binding constraint, not time. Every FCT forward keeps its
+autograd graph alive until the single backward, so peak memory scales with the
+NUMBER OF LIVE GRAPHS, not with the number of passes. With both flips that is
+3 concurrent graphs against the baseline's 1. If you OOM, escalate in this
+order and apply the same setting to BOTH arms, or they stop being comparable:
+
+    1. --amp 1        mixed precision; roughly halves activation memory
+    2. --fct_sub 8    consistency on half the batch; supervised loss untouched
+    3. --fct_vflip 0  one flip instead of two; 2 live graphs instead of 3
+    4. --batchsize 8  last resort -- this changes the recipe itself
+
+--fct_sub is the one to prefer over --batchsize: it shrinks only the flip
+forwards, leaving the supervised loss and the effective batch size exactly as
+the baseline sees them.
 
 USAGE
 -----
@@ -73,6 +88,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
+from torch.cuda.amp import autocast, GradScaler
 
 from lib.pvt import PolypPVT
 from utils.dataloader import get_loader, test_dataset
@@ -114,7 +130,7 @@ def _prob(model, x):
     return torch.sigmoid(p1 + p2)
 
 
-def flip_consistency(model, images, use_vflip=True):
+def flip_consistency(model, images, p_o, use_vflip=True):
     """Consistency-only FCT: the flipped views are NEVER supervised by the GT.
 
     This mirrors `fct_supervise_flips=False` on the patch side, and the
@@ -123,8 +139,12 @@ def flip_consistency(model, images, use_vflip=True):
     and the arm would silently collapse back into the augmented baseline this
     file exists to remove. Here the flips contribute the consistency signal
     and nothing else.
+
+    `p_o` is the ALREADY-COMPUTED sigmoid(P1+P2) of the unflipped batch,
+    passed in rather than recomputed. Recomputing it would run a second
+    forward pass over the same input and hold a second autograd graph alive
+    until backward -- pure waste, and enough on its own to OOM at batch 16.
     """
-    p_o = _prob(model, images)
     cons = F.mse_loss(_hflip(_prob(model, _hflip(images))), p_o)
     if use_vflip:
         cons = 0.5 * (cons + F.mse_loss(_vflip(_prob(model, _vflip(images))), p_o))
@@ -183,6 +203,7 @@ def evaluate_all(model, test_root):
 # ---------------------------------------------------------------- train loop
 def train(train_loader, model, optimizer, epoch, opt, state):
     model.train()
+    scaler = state.get('scaler')
     size_rates = [0.75, 1, 1.25] if opt.multiscale else [1]
     loss_record = AvgMeter()
     cons_record = AvgMeter()
@@ -201,24 +222,39 @@ def train(train_loader, model, optimizer, epoch, opt, state):
                 gts = F.upsample(gts, size=(trainsize, trainsize),
                                  mode='bilinear', align_corners=True)
 
-            P1, P2 = model(images)
-            loss = structure_loss(P1, gts) + structure_loss(P2, gts)
+            with autocast(enabled=bool(opt.amp)):
+                P1, P2 = model(images)
+                loss = structure_loss(P1, gts) + structure_loss(P2, gts)
 
-            # Consistency only at the canonical scale, so FCT costs 2 extra
-            # forwards per step rather than 2 per scale.
-            if opt.fct and rate == 1:
-                it = state['iter']
-                lam = opt.fct_weight
-                if opt.fct_warmup_iters > 0 and it < opt.fct_warmup_iters:
-                    lam = opt.fct_weight * (it / float(opt.fct_warmup_iters))
-                cons = flip_consistency(model, images, use_vflip=bool(opt.fct_vflip))
-                loss = loss + lam * cons
-                cons_record.update(cons.data, opt.batchsize)
-                state['iter'] += 1
+                # Consistency only at the canonical scale, so FCT costs extra
+                # forwards per step rather than per scale.
+                if opt.fct and rate == 1:
+                    it = state['iter']
+                    lam = opt.fct_weight
+                    if opt.fct_warmup_iters > 0 and it < opt.fct_warmup_iters:
+                        lam = opt.fct_weight * (it / float(opt.fct_warmup_iters))
+                    # Reuse the forward above as the consistency target -- do
+                    # NOT call the model on `images` a second time.
+                    p_o = torch.sigmoid(P1 + P2)
+                    n = images.shape[0]
+                    if opt.fct_sub > 0:
+                        n = min(opt.fct_sub, n)
+                    cons = flip_consistency(model, images[:n], p_o[:n],
+                                            use_vflip=bool(opt.fct_vflip))
+                    loss = loss + lam * cons
+                    cons_record.update(cons.data, opt.batchsize)
+                    state['iter'] += 1
 
-            loss.backward()
-            clip_gradient(optimizer, opt.clip)
-            optimizer.step()
+            if scaler is not None:
+                scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)      # clip on real, unscaled grads
+                clip_gradient(optimizer, opt.clip)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                clip_gradient(optimizer, opt.clip)
+                optimizer.step()
 
             if rate == 1:
                 loss_record.update(loss.data, opt.batchsize)
@@ -275,7 +311,23 @@ if __name__ == '__main__':
                         help='consistency weight; 0.05 is far too weak to install an '
                              'invariance when no augmentation supplies one')
     parser.add_argument('--fct_warmup_iters', type=int, default=300)
-    parser.add_argument('--fct_vflip', type=int, default=1)
+    parser.add_argument('--fct_vflip', type=int, default=1,
+                        help='0 = horizontal flip only; halves the FCT memory cost')
+    parser.add_argument('--fct_sub', type=int, default=0,
+                        help='compute the consistency term on only the first N samples '
+                             'of each batch (0 = whole batch). Cuts FCT memory without '
+                             'touching the supervised loss or the effective batch size')
+
+    # --- memory ---
+    # Escalate in this order when you hit OOM:
+    #   1. --amp 1          (roughly halves activation memory, both arms)
+    #   2. --fct_sub 8      (consistency on half the batch)
+    #   3. --fct_vflip 0    (one flip instead of two)
+    #   4. --batchsize 8    (last resort: changes the recipe)
+    # Use the SAME settings for the no-FCT arm, or the arms are not comparable.
+    parser.add_argument('--amp', type=int, default=0,
+                        help='1 = mixed precision. Apply to BOTH arms or they differ '
+                             'by more than the thing being measured')
 
     opt = parser.parse_args()
 
@@ -301,12 +353,13 @@ if __name__ == '__main__':
                               trainsize=opt.trainsize, augmentation=False)
 
     print('#' * 20, 'Start Training (no orientation augmentation)', '#' * 20)
-    print('multiscale:', bool(opt.multiscale),
+    print('multiscale:', bool(opt.multiscale), '| amp:', bool(opt.amp),
           '| FCT:', bool(opt.fct),
           ('(weight %.3f, vflip %s, warmup %d)' % (opt.fct_weight, bool(opt.fct_vflip),
                                                    opt.fct_warmup_iters)) if opt.fct else '')
 
-    state = {'best': 0.0, 'iter': 0, 'total_step': len(train_loader)}
+    state = {'best': 0.0, 'iter': 0, 'total_step': len(train_loader),
+             'scaler': GradScaler() if opt.amp else None}
     for epoch in range(1, opt.epoch):
         adjust_lr(optimizer, opt.lr, epoch, 0.1, 200)
         train(train_loader, model, optimizer, epoch, opt, state)
