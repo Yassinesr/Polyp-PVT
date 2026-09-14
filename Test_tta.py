@@ -17,10 +17,17 @@ compared on equal terms. Two details are matched deliberately:
     correspond to any single prediction.
 
 Usage:
-  python Test_tta.py --pth_path ./model_pth/PolypPVT_noaug/PolypPVT.pth \
-                     --save_root ./result_map/PolypPVT_noaug_TTA
+  python Test_tta.py --views 1 --pth_path ./model_pth/PVT_B --save_root ./result_map/PVT_B
+  python Test_tta.py --views 4 --pth_path ./model_pth/PVT_B --save_root ./result_map/PVT_C
+
+--pth_path takes either a .pth file or the --train_save DIRECTORY you trained
+into. Given a directory it prefers PolypPVT.pth (best), then last.pth, then the
+highest-numbered per-epoch file. --views 1 is plain inference and --views 4 is
+flip TTA, so both passes of the ablation come from one code path.
 """
 import os
+import re
+import glob
 import argparse
 
 import cv2
@@ -32,6 +39,49 @@ from lib.pvt import PolypPVT
 from utils.dataloader import test_dataset
 
 TESTSETS = ['CVC-300', 'CVC-ClinicDB', 'Kvasir', 'CVC-ColonDB', 'ETIS-LaribPolypDB']
+
+
+def resolve_checkpoint(path):
+    """Accept a .pth file OR a training directory, and pick sensibly.
+
+    Train_noaug.py writes three kinds of checkpoint:
+        PolypPVT.pth      best epoch so far -- ONLY written once an epoch has
+                          improved on the running best, so it is absent early
+                          in a run, or if training died before its first eval
+        last.pth          overwritten every epoch; present after epoch 1
+        <N>PolypPVT.pth   per-epoch, only with --save_every_epoch 1
+
+    Preference: best -> last -> highest-numbered epoch. When nothing matches,
+    the error lists what the directory actually holds, which is quicker to act
+    on than a bare FileNotFoundError on a path that was never going to exist.
+    """
+    if os.path.isfile(path):
+        return path
+
+    d = path if os.path.isdir(path) else os.path.dirname(path)
+    if not os.path.isdir(d):
+        raise FileNotFoundError(
+            'No such checkpoint or directory: {}\n'
+            'Point --pth_path at the --train_save directory you trained into.'.format(path))
+
+    for cand in ('PolypPVT.pth', 'last.pth'):
+        f = os.path.join(d, cand)
+        if os.path.isfile(f):
+            return f
+
+    epochs = glob.glob(os.path.join(d, '*PolypPVT.pth'))
+    if epochs:
+        def _n(f):
+            m = re.match(r'(\d+)PolypPVT\.pth$', os.path.basename(f))
+            return int(m.group(1)) if m else -1
+        return max(epochs, key=_n)
+
+    have = sorted(os.listdir(d)) or ['(empty)']
+    raise FileNotFoundError(
+        'No checkpoint in {}\nFound: {}\n\n'
+        'PolypPVT.pth appears only after an epoch improves on the running best, '
+        'and last.pth after the first epoch completes. If neither is there, '
+        'training has not finished an epoch yet.'.format(d, ', '.join(have)))
 
 
 @torch.no_grad()
@@ -61,11 +111,12 @@ if __name__ == '__main__':
                         help='4 = flip TTA, 1 = plain inference (for an A/B on one script)')
     opt = parser.parse_args()
 
+    pth = resolve_checkpoint(opt.pth_path)
     model = PolypPVT()
-    model.load_state_dict(torch.load(opt.pth_path))
+    model.load_state_dict(torch.load(pth))
     model.cuda()
     model.eval()
-    print('checkpoint:', opt.pth_path)
+    print('checkpoint:', pth)
     print('views:', opt.views, '| out:', opt.save_root)
 
     for name in TESTSETS:
