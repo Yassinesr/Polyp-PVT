@@ -109,6 +109,13 @@ if __name__ == '__main__':
     parser.add_argument('--save_root', type=str, default='./result_map/PolypPVT_TTA')
     parser.add_argument('--views', type=int, default=4, choices=[1, 4],
                         help='4 = flip TTA, 1 = plain inference (for an A/B on one script)')
+    parser.add_argument('--single_view', type=str, default='none',
+                        choices=['none', 'h', 'v', 'hv'],
+                        help="DIAGNOSTIC. Predict from ONE flipped view and flip the "
+                             "result back, instead of averaging. If the model were "
+                             "flip-equivariant every choice would score the same as "
+                             "--views 1; whatever it loses is the equivariance gap that "
+                             "TTA is averaging over. Implies --views 1.")
     opt = parser.parse_args()
 
     pth = resolve_checkpoint(opt.pth_path)
@@ -117,7 +124,10 @@ if __name__ == '__main__':
     model.cuda()
     model.eval()
     print('checkpoint:', pth)
-    print('views:', opt.views, '| out:', opt.save_root)
+    if opt.single_view != 'none':
+        print('DIAGNOSTIC single view:', opt.single_view, '| out:', opt.save_root)
+    else:
+        print('views:', opt.views, '| out:', opt.save_root)
 
     for name in TESTSETS:
         data_path = os.path.join(opt.data_root, name)
@@ -135,14 +145,18 @@ if __name__ == '__main__':
             gt /= (gt.max() + 1e-8)
             image = image.cuda()
 
-            if opt.views == 4:
+            if opt.views == 4 and opt.single_view == 'none':
                 res = tta_probability(model, image, gt.shape)
             else:
+                dims = {'none': [], 'h': [3], 'v': [2], 'hv': [2, 3]}[opt.single_view]
                 with torch.no_grad():
-                    p1, p2 = model(image)
-                    res = F.upsample(p1 + p2, size=gt.shape, mode='bilinear',
-                                     align_corners=False).sigmoid()
-                res = res.data.cpu().numpy().squeeze()
+                    x = torch.flip(image, dims=dims) if dims else image
+                    p1, p2 = model(x)
+                    r = F.upsample(p1 + p2, size=gt.shape, mode='bilinear',
+                                   align_corners=False).sigmoid()
+                    if dims:
+                        r = torch.flip(r, dims=dims)
+                res = r.data.cpu().numpy().squeeze()
 
             res = (res - res.min()) / (res.max() - res.min() + 1e-8)
             cv2.imwrite(os.path.join(save_path, fname), res * 255)
