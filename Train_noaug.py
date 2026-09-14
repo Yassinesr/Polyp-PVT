@@ -60,15 +60,30 @@ in train() mode samples an independent depth mask. Pass --drop_path 0 for any
 FCT run (and the same value on the no-FCT arm) or the consistency term mostly
 measures that noise. See the flag's help text.
 
-MEMORY is the binding constraint, not time. Every FCT forward keeps its
-autograd graph alive until the single backward, so peak memory scales with the
-NUMBER OF LIVE GRAPHS, not with the number of passes. With both flips that is
-3 concurrent graphs against the baseline's 1. If you OOM, escalate in this
-order and apply the same setting to BOTH arms, or they stop being comparable:
+MEMORY is the binding constraint, not time. An FCT forward keeps its autograd
+graph alive until backward, so peak memory scales with the NUMBER OF LIVE
+GRAPHS, not the number of passes.
+
+--fct_mode seq (the default) removes that problem. Each view is backwarded as
+soon as it is computed, accumulating into .grad, so exactly ONE graph is alive
+at any moment and peak memory is essentially the no-FCT baseline: if arm A
+fits, arm B fits. The cost is that the consistency target must be DETACHED --
+gradients flow only into the flipped branch, pulling it toward the original
+rather than pulling both together.
+
+That stop-gradient is the standard formulation in consistency training (the
+Pi-model, Mean Teacher and FixMatch all detach the target) and it avoids the
+degenerate pressure to collapse both branches toward a constant. It is, however,
+NOT identical to the patch-side arm B, which used the coupled form. If memory
+allows, --fct_mode joint reproduces that exactly; if it does not, report which
+mode was used, because the two are different estimators of the same idea.
+
+If even seq mode OOMs, the baseline itself is too big for the card. Lower
+--batchsize on BOTH arms, and only then consider the knobs below:
 
     1. --amp 1        mixed precision; roughly halves activation memory
-    2. --fct_vflip 0  one flip instead of two; 2 live graphs instead of 3
-    3. --batchsize 8  changes the recipe, so apply it to both arms
+    2. --batchsize 8  changes the recipe, so apply it to both arms
+    3. --fct_vflip 0  horizontal flip only; halves the FCT time cost
     4. --fct_sub 8    LAST resort, see the caveat below
 
 --fct_sub caveat: the decoder contains BatchNorm, and in train() mode BN
@@ -232,37 +247,62 @@ def train(train_loader, model, optimizer, epoch, opt, state):
                 gts = F.upsample(gts, size=(trainsize, trainsize),
                                  mode='bilinear', align_corners=True)
 
+            do_fct = bool(opt.fct) and rate == 1
+            lam = 0.0
+            if do_fct:
+                it = state['iter']
+                lam = opt.fct_weight
+                if opt.fct_warmup_iters > 0 and it < opt.fct_warmup_iters:
+                    lam = opt.fct_weight * (it / float(opt.fct_warmup_iters))
+                state['iter'] += 1
+
+            def _bw(t):
+                """Backward one term, accumulating into .grad."""
+                if scaler is not None:
+                    scaler.scale(t).backward()
+                else:
+                    t.backward()
+
+            # ---- supervised view ------------------------------------------
             with autocast(enabled=bool(opt.amp)):
                 P1, P2 = model(images)
                 loss = structure_loss(P1, gts) + structure_loss(P2, gts)
+                # Target for the consistency term, taken from this same
+                # forward. In seq mode it is detached so this graph can be
+                # freed immediately.
+                p_o = torch.sigmoid(P1 + P2) if do_fct else None
 
-                # Consistency only at the canonical scale, so FCT costs extra
-                # forwards per step rather than per scale.
-                if opt.fct and rate == 1:
-                    it = state['iter']
-                    lam = opt.fct_weight
-                    if opt.fct_warmup_iters > 0 and it < opt.fct_warmup_iters:
-                        lam = opt.fct_weight * (it / float(opt.fct_warmup_iters))
-                    # Reuse the forward above as the consistency target -- do
-                    # NOT call the model on `images` a second time.
-                    p_o = torch.sigmoid(P1 + P2)
-                    n = images.shape[0]
-                    if opt.fct_sub > 0:
-                        n = min(opt.fct_sub, n)
-                    cons = flip_consistency(model, images[:n], p_o[:n],
-                                            use_vflip=bool(opt.fct_vflip))
-                    loss = loss + lam * cons
+            if do_fct and opt.fct_mode == 'seq':
+                p_o = p_o.detach()
+                _bw(loss)                      # frees the supervised graph NOW
+                n = images.shape[0] if opt.fct_sub <= 0 else min(opt.fct_sub, images.shape[0])
+                w = 0.5 * lam if opt.fct_vflip else lam
+                cons_total = 0.0
+                for flip in (['h', 'v'] if opt.fct_vflip else ['h']):
+                    f = _hflip if flip == 'h' else _vflip
+                    with autocast(enabled=bool(opt.amp)):
+                        pf = f(_prob(model, f(images[:n])))
+                        c = F.mse_loss(pf, p_o[:n])
+                    _bw(w * c)                 # frees this view's graph NOW
+                    cons_total += float(c.detach())
+                cons_record.update(torch.tensor(cons_total / (2 if opt.fct_vflip else 1)),
+                                   opt.batchsize)
+            else:
+                if do_fct:
+                    n = images.shape[0] if opt.fct_sub <= 0 else min(opt.fct_sub, images.shape[0])
+                    with autocast(enabled=bool(opt.amp)):
+                        cons = flip_consistency(model, images[:n], p_o[:n],
+                                                use_vflip=bool(opt.fct_vflip))
+                        loss = loss + lam * cons
                     cons_record.update(cons.data, opt.batchsize)
-                    state['iter'] += 1
+                _bw(loss)
 
             if scaler is not None:
-                scaler.scale(loss).backward()
                 scaler.unscale_(optimizer)      # clip on real, unscaled grads
                 clip_gradient(optimizer, opt.clip)
                 scaler.step(optimizer)
                 scaler.update()
             else:
-                loss.backward()
                 clip_gradient(optimizer, opt.clip)
                 optimizer.step()
 
@@ -326,6 +366,12 @@ if __name__ == '__main__':
     parser.add_argument('--fct_warmup_iters', type=int, default=300)
     parser.add_argument('--fct_vflip', type=int, default=1,
                         help='0 = horizontal flip only; halves the FCT memory cost')
+    parser.add_argument('--fct_mode', type=str, default='seq', choices=['seq', 'joint'],
+                        help="seq: backward each view separately against a DETACHED "
+                             "target, so only one autograd graph is ever alive -- peak "
+                             "memory is essentially the no-FCT baseline. joint: one "
+                             "backward over all views, gradients flow through both "
+                             "sides of the MSE; ~3x the activation memory")
     parser.add_argument('--fct_sub', type=int, default=0,
                         help='compute the consistency term on only the first N samples '
                              'of each batch (0 = whole batch). Cuts FCT memory without '
