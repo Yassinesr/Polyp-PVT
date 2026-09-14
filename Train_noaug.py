@@ -386,6 +386,19 @@ if __name__ == '__main__':
     parser.add_argument('--multiscale', type=int, default=1,
                         help='1 = stock [0.75,1,1.25] multi-scale, 0 = single scale')
 
+    # Orientation augmentation. Off by default -- this script exists to remove
+    # it. The flag is here for ONE purpose: testing whether the ~0.018 gap
+    # between the no-aug arms and the released Polyp-PVT checkpoint is the
+    # value of orientation augmentation. The released model may well have been
+    # trained with it, since the stock --augmentation flag works from the
+    # command line even though its default silently does not.
+    #
+    # Turning this ON re-enables RandomRotation(90) + V/H flips, which is
+    # exactly the symmetry group FCT constrains and TTA averages over. Do not
+    # combine it with --fct and then report the result as an FCT measurement.
+    parser.add_argument('--orientation_aug', type=int, default=0,
+                        help='1 = re-enable RandomRotation + V/H flips (diagnostic only)')
+
     # Flip-consistency training. Consistency-only: flipped views are never
     # supervised by the GT, so this adds no augmentation of its own.
     parser.add_argument('--fct', type=int, default=0, help='1 = enable flip consistency')
@@ -485,15 +498,20 @@ if __name__ == '__main__':
     image_root = '{}/images/'.format(opt.train_path)
     gt_root = '{}/masks/'.format(opt.train_path)
 
-    # augmentation=False routes the loader to its no-augmentation branch:
-    # Resize -> ToTensor (-> Normalize for the image). No flips, no rotation.
-    # Deliberately not configurable -- re-enabling it would defeat this script.
+    # The loader gates on `augmentations == 'True'` -- a STRING compare -- so
+    # the string is what turns it on. Anything else (including the bool True)
+    # lands in the no-augmentation branch: Resize -> ToTensor -> Normalize.
+    _aug = 'True' if opt.orientation_aug else False
     train_loader = get_loader(image_root, gt_root, batchsize=opt.batchsize,
-                              trainsize=opt.trainsize, augmentation=False)
+                              trainsize=opt.trainsize, augmentation=_aug)
 
     print('#' * 20, 'Start Training (no orientation augmentation)', '#' * 20)
     print('AUGMENTATION IN EFFECT')
-    print('  orientation (flip/rotate) : OFF  (hard-wired, not configurable)')
+    print('  orientation (flip/rotate) : {}'.format(
+        'ON   (RandomRotation + V/H flips) -- DIAGNOSTIC ARM' if opt.orientation_aug else 'OFF'))
+    if opt.orientation_aug and opt.fct:
+        print('  !! --orientation_aug with --fct: the augmentation supplies the very')
+        print('     symmetry the consistency term constrains. Not an FCT measurement.')
     print('  photometric               : OFF  (this repo has none)')
     print('  multi-scale [0.75,1,1.25] : {}'.format('ON' if opt.multiscale else 'OFF'))
     print('  stochastic depth          : {:.3f}{}'.format(
