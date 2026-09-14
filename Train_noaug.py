@@ -86,7 +86,11 @@ If even seq mode OOMs, the baseline itself is too big for the card. Lower
     3. --fct_vflip 0  horizontal flip only; halves the FCT time cost
     4. --fct_sub 8    LAST resort, see the caveat below
 
---fct_sub caveat: the decoder contains BatchNorm, and in train() mode BN
+--fct_sub caveat 1: it also breaks --fct_sync_rng. DropPath draws a mask of
+shape (batch,1,1,1) per block, so a sliced batch draws a different NUMBER of
+randoms and the views no longer share a mask even with the RNG restored.
+
+--fct_sub caveat 2: the decoder contains BatchNorm, and in train() mode BN
 normalises using the CURRENT batch's statistics. Slicing images[:n] for the
 flipped forwards means they are normalised over n samples while the target
 p_o was normalised over the full batch, so the MSE picks up a BN-statistics
@@ -144,6 +148,19 @@ def _vflip(t):
     return torch.flip(t, dims=[-2])
 
 
+def _rng_snapshot():
+    st = (torch.get_rng_state(),)
+    if torch.cuda.is_available():
+        st = st + (torch.cuda.get_rng_state_all(),)
+    return st
+
+
+def _rng_restore(st):
+    torch.set_rng_state(st[0])
+    if len(st) > 1:
+        torch.cuda.set_rng_state_all(st[1])
+
+
 def _prob(model, x):
     """Inference-equivalent probability map: sigmoid(P1 + P2).
 
@@ -155,7 +172,7 @@ def _prob(model, x):
     return torch.sigmoid(p1 + p2)
 
 
-def flip_consistency(model, images, p_o, use_vflip=True):
+def flip_consistency(model, images, p_o, use_vflip=True, rng0=None):
     """Consistency-only FCT: the flipped views are NEVER supervised by the GT.
 
     This mirrors `fct_supervise_flips=False` on the patch side, and the
@@ -172,6 +189,8 @@ def flip_consistency(model, images, p_o, use_vflip=True):
     """
     cons = F.mse_loss(_hflip(_prob(model, _hflip(images))), p_o)
     if use_vflip:
+        if rng0 is not None:
+            _rng_restore(rng0)
         cons = 0.5 * (cons + F.mse_loss(_vflip(_prob(model, _vflip(images))), p_o))
     return cons
 
@@ -248,6 +267,11 @@ def train(train_loader, model, optimizer, epoch, opt, state):
                                  mode='bilinear', align_corners=True)
 
             do_fct = bool(opt.fct) and rate == 1
+            # Snapshot the RNG so every view of this sample can be given the
+            # SAME stochastic-depth mask. Without this, f(x) and f(flip x) draw
+            # independent DropPath masks and the consistency term measures that
+            # noise instead of flip non-equivariance.
+            rng0 = _rng_snapshot() if (do_fct and opt.fct_sync_rng) else None
             lam = 0.0
             if do_fct:
                 it = state['iter']
@@ -280,6 +304,8 @@ def train(train_loader, model, optimizer, epoch, opt, state):
                 cons_total = 0.0
                 for flip in (['h', 'v'] if opt.fct_vflip else ['h']):
                     f = _hflip if flip == 'h' else _vflip
+                    if rng0 is not None:
+                        _rng_restore(rng0)   # same depth mask as the main view
                     with autocast(enabled=bool(opt.amp)):
                         pf = f(_prob(model, f(images[:n])))
                         c = F.mse_loss(pf, p_o[:n])
@@ -290,9 +316,12 @@ def train(train_loader, model, optimizer, epoch, opt, state):
             else:
                 if do_fct:
                     n = images.shape[0] if opt.fct_sub <= 0 else min(opt.fct_sub, images.shape[0])
+                    if rng0 is not None:
+                        _rng_restore(rng0)
                     with autocast(enabled=bool(opt.amp)):
                         cons = flip_consistency(model, images[:n], p_o[:n],
-                                                use_vflip=bool(opt.fct_vflip))
+                                                use_vflip=bool(opt.fct_vflip),
+                                                rng0=rng0)
                         loss = loss + lam * cons
                     cons_record.update(cons.data, opt.batchsize)
                 _bw(loss)
@@ -396,7 +425,14 @@ if __name__ == '__main__':
     # measure AND by two independent depth masks, which is pure noise. Set this
     # to 0 for any FCT run, and use the same value on the no-FCT arm.
     parser.add_argument('--drop_path', type=float, default=0.1,
-                        help='stochastic depth rate; 0.1 = stock. USE 0 WITH --fct')
+                        help='stochastic depth rate; 0.1 = stock. Safe to leave at '
+                             'stock when --fct_sync_rng 1')
+    parser.add_argument('--fct_sync_rng', type=int, default=1,
+                        help='restore the RNG before each flipped forward so every view '
+                             'of a sample gets the SAME DropPath mask. This is what makes '
+                             'the consistency term measure flip non-equivariance rather '
+                             'than depth-mask noise, and it lets stochastic depth stay at '
+                             'its stock 0.1 instead of being switched off')
 
     # --- housekeeping ---
     parser.add_argument('--save_every_epoch', type=int, default=0,
@@ -430,13 +466,13 @@ if __name__ == '__main__':
     # Stochastic depth. Must be 0 for FCT to measure flip non-equivariance
     # rather than depth-mask noise; must match across arms either way.
     model.backbone.reset_drop_path(opt.drop_path)
-    if opt.fct and opt.drop_path > 0:
+    if opt.fct and opt.drop_path > 0 and not opt.fct_sync_rng:
         print('!' * 78)
-        print('WARNING: --fct 1 with --drop_path {:.3f}.'.format(opt.drop_path))
-        print('  Stochastic depth is active, so f(x) and f(flip x) use different')
-        print('  random depth masks and the consistency term will be dominated by')
-        print('  that noise rather than by flip non-equivariance.')
-        print('  Re-run with --drop_path 0 (on BOTH arms).')
+        print('WARNING: --fct 1, --drop_path {:.3f}, --fct_sync_rng 0.'.format(opt.drop_path))
+        print('  Stochastic depth is active and the views are NOT sharing a depth')
+        print('  mask, so the consistency term will be dominated by that noise')
+        print('  rather than by flip non-equivariance.')
+        print('  Use --fct_sync_rng 1 (preferred) or --drop_path 0 on BOTH arms.')
         print('!' * 78)
 
     params = model.parameters()
@@ -460,7 +496,9 @@ if __name__ == '__main__':
     print('  orientation (flip/rotate) : OFF  (hard-wired, not configurable)')
     print('  photometric               : OFF  (this repo has none)')
     print('  multi-scale [0.75,1,1.25] : {}'.format('ON' if opt.multiscale else 'OFF'))
-    print('  stochastic depth          : {:.3f}'.format(opt.drop_path))
+    print('  stochastic depth          : {:.3f}{}'.format(
+        opt.drop_path,
+        '  (mask shared across views)' if (opt.fct and opt.fct_sync_rng) else ''))
     print('TRAINING')
     print('  batchsize {}  trainsize {}  amp {}  epochs {}'.format(
         opt.batchsize, opt.trainsize, bool(opt.amp), opt.epoch))
