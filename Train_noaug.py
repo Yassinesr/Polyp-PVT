@@ -529,8 +529,15 @@ if __name__ == '__main__':
         print('     (900 Kvasir + 550 CVC-ClinicDB). Results are NOT comparable')
         print('     to the released checkpoint, which was trained on the full set.')
     print('TRAINING')
-    print('  batchsize {}  trainsize {}  amp {}  epochs {}'.format(
-        opt.batchsize, opt.trainsize, bool(opt.amp), opt.epoch))
+    print('  batchsize {}  trainsize {}  amp {}  epochs {} (loop runs 1..{})'.format(
+        opt.batchsize, opt.trainsize, bool(opt.amp), opt.epoch, opt.epoch - 1))
+    # adjust_lr is called with a hardcoded decay_epoch of 200, so for any run
+    # shorter than that decay = 0.1**0 = 1 and the multiply is a no-op: the
+    # learning rate never changes. --decay_rate and --decay_epoch are parsed
+    # but never read. Both are stock behaviour, left alone so the recipe stays
+    # faithful to the released one, but stated here so nobody assumes a
+    # schedule that is not running.
+    print('  lr {} CONSTANT (no decay; --decay_rate/--decay_epoch are inert)'.format(opt.lr))
     if opt.fct:
         print('  FCT consistency-only: weight {:.3f}, vflip {}, warmup {}, sub {}'.format(
             opt.fct_weight, bool(opt.fct_vflip), opt.fct_warmup_iters,
