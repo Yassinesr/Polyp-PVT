@@ -107,6 +107,17 @@ USAGE
     python Train_noaug.py --fct 1 --fct_weight 0.5 --train_save ./model_pth/PolypPVT_noaug_fct/
 
 Then score with Test.py (no TTA) and Test_tta.py (4-view flip TTA).
+
+FCT v2 (seq mode only; every default keeps the v1 behaviour above)
+-----------------------------------------------------------------
+  --fct_sup 1         also supervise each flipped view with structure_loss;
+                      all views weighted 1/n_views
+  --fct_loss bce      soft BCE on logits instead of sigmoid-MSE (no saturation)
+  --fct_weit 1        weight the consistency by the structure_loss boundary
+                      weight (1..6), normalised per image
+  --fct_all_scales 1  flipped views at every multi-scale rate, not only rate 1
+  --grad_diag N       every N batches log |g_cons|/|g_sup| and their cosine
+See run_fct_v2.sh for the arms, and flip_gap.py for the equivariance check.
 """
 import os
 import argparse
@@ -126,9 +137,20 @@ from utils.utils import clip_gradient, adjust_lr, AvgMeter
 TESTSETS = ['CVC-300', 'CVC-ClinicDB', 'Kvasir', 'CVC-ColonDB', 'ETIS-LaribPolypDB']
 
 
+def _boundary_weight(mask):
+    """The stock structure_loss weight: 1 in flat regions, up to 6 near a boundary."""
+    return 1 + 5 * torch.abs(F.avg_pool2d(mask, kernel_size=31, stride=1, padding=15) - mask)
+
+
 def structure_loss(pred, mask):
-    """Unchanged from the stock repo."""
-    weit = 1 + 5 * torch.abs(F.avg_pool2d(mask, kernel_size=31, stride=1, padding=15) - mask)
+    """Unchanged from the stock repo.
+
+    Note the stock `reduce='none'`: `reduce` is the old boolean argument and the
+    string counts as true, so the BCE term comes back as a scalar mean and
+    `weit` has NO effect on it (it still weights the IoU term). Every arm, and
+    the released checkpoint, share this, so it is deliberately left as is.
+    """
+    weit = _boundary_weight(mask)
     wbce = F.binary_cross_entropy_with_logits(pred, mask, reduce='none')
     wbce = (weit * wbce).sum(dim=(2, 3)) / weit.sum(dim=(2, 3))
 
@@ -195,6 +217,48 @@ def flip_consistency(model, images, p_o, use_vflip=True, rng0=None):
     return cons
 
 
+def _per_pixel_consistency(z_f, z_o, p_o, loss):
+    """Per-pixel disagreement between a flipped-back view and the upright target.
+
+    z_f  logits P1+P2 of the flipped view, already flipped back (has grad)
+    z_o  detached logits of the upright view
+    p_o  detached sigmoid(z_o)
+
+    mse  (sigmoid(z_f) - p_o)^2. Its gradient carries a sigmoid'(z_f) factor,
+         so confident pixels -- including confidently WRONG ones -- get almost
+         none.
+    bce  soft BCE on logits, BCE(z_f, p_o). Gradient w.r.t. z_f is exactly
+         sigmoid(z_f) - p_o, the same form as the BCE term of structure_loss,
+         with no saturation. Returns (loss, disagreement), where disagreement =
+         BCE(z_f, p_o) - BCE(z_o, p_o) is the KL part (the raw BCE never falls
+         below the entropy of p_o, so it looks stuck in the log).
+    """
+    if loss == 'mse':
+        per = (torch.sigmoid(z_f.float()) - p_o.float()) ** 2
+        return per, per.detach()
+    per = F.binary_cross_entropy_with_logits(z_f.float(), p_o.float(), reduction='none')
+    ent = F.binary_cross_entropy_with_logits(z_o.float(), p_o.float(), reduction='none')
+    return per, (per.detach() - ent)
+
+
+def _reduce(per, weit):
+    """Mean over pixels, optionally weighted per image like structure_loss."""
+    if weit is None:
+        return per.mean()
+    return ((weit * per).sum(dim=(2, 3)) / weit.sum(dim=(2, 3))).mean()
+
+
+def _flat_grad(model):
+    return torch.cat([(p.grad if p.grad is not None else torch.zeros_like(p)).detach().float().reshape(-1)
+                      for p in model.parameters()])
+
+
+def _fct_v2(opt):
+    """True when any v2 option is set; otherwise the v1 code path runs unchanged."""
+    return bool(opt.fct) and bool(opt.fct_sup or opt.fct_loss != 'mse' or opt.fct_weit
+                                  or opt.fct_all_scales or opt.grad_diag)
+
+
 # ---------------------------------------------------------------- evaluation
 def test(model, path, dataset):
     """Unchanged from the stock repo."""
@@ -245,8 +309,93 @@ def evaluate_all(model, test_root):
 
 
 # ---------------------------------------------------------------- train loop
+def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
+                 cons_record, _bw, unit_rate):
+    """One FCT step with the v2 options (seq mode only).
+
+    Views: upright + h (+ v). For each flipped view:
+      * --fct_sup 1   it is ALSO supervised: structure_loss of its flipped-back
+                      P1 and P2 against the GT. Every view's supervised term is
+                      weighted 1/n_views, so the total supervised scale equals
+                      one view. This is deterministic flip augmentation; the
+                      consistency term is what comes on top of it.
+      * lam > 0       consistency of its flipped-back logits against the
+                      DETACHED upright prediction, per --fct_loss, optionally
+                      weighted by the structure_loss boundary weight
+                      (--fct_weit 1). lam is split evenly over the flipped views.
+
+    The upright graph is freed before any flipped forward, so one graph is alive
+    at a time, as in the v1 seq mode. Returns the supervised loss averaged over
+    the views (for logging).
+    """
+    flips = [_hflip, _vflip] if opt.fct_vflip else [_hflip]
+    n_views = 1 + len(flips)
+    sup_w = 1.0 / n_views if opt.fct_sup else 1.0
+    n = images.shape[0] if opt.fct_sub <= 0 else min(opt.fct_sub, images.shape[0])
+
+    z_o = (P1 + P2).detach().float()[:n]
+    p_o = torch.sigmoid(z_o)
+    weit = _boundary_weight(gts[:n].float()) if opt.fct_weit else None
+    _bw(sup_w * loss)                          # frees the upright graph NOW
+    sup_sum = float(loss.detach())
+
+    diag = (opt.grad_diag > 0 and unit_rate and lam > 0
+            and state['iter'] % opt.grad_diag == 0)
+    if not opt.fct_sup and lam <= 0:
+        flips = []                             # nothing to train on the flips (warmup step 0)
+    g_cons = None
+    cons_sum, cons_n = 0.0, 0
+    for f in flips:
+        if rng0 is not None:
+            _rng_restore(rng0)                 # same depth mask as the upright view
+        with autocast(enabled=bool(opt.amp)):
+            p1f, p2f = model(f(images[:n]))
+            p1f, p2f = f(p1f), f(p2f)          # back to the upright frame
+            sup_f = None
+            if opt.fct_sup:
+                sup_f = structure_loss(p1f, gts[:n]) + structure_loss(p2f, gts[:n])
+        cons_f = None
+        if lam > 0:
+            per, dis = _per_pixel_consistency(p1f + p2f, z_o, p_o, opt.fct_loss)
+            cons_f = _reduce(per, weit)
+            cons_sum += float(_reduce(dis, weit))
+            cons_n += 1
+
+        w_c = lam / len(flips)
+        if diag and cons_f is not None:
+            g_a = _flat_grad(model)
+            _bw(w_c * cons_f, retain=sup_f is not None)
+            d = _flat_grad(model) - g_a
+            g_cons = d if g_cons is None else g_cons + d
+            del g_a, d
+            if sup_f is not None:
+                _bw(sup_w * sup_f)
+        else:
+            total = 0.0
+            if cons_f is not None:
+                total = total + w_c * cons_f
+            if sup_f is not None:
+                total = total + sup_w * sup_f
+            if torch.is_tensor(total):
+                _bw(total)                     # frees this view's graph NOW
+        if sup_f is not None:
+            sup_sum += float(sup_f.detach())
+
+    if cons_n:
+        cons_record.update(torch.tensor(cons_sum / cons_n), opt.batchsize)
+    if g_cons is not None:
+        g_sup = _flat_grad(model) - g_cons
+        ratio = g_cons.norm() / (g_sup.norm() + 1e-12)
+        cos = F.cosine_similarity(g_cons, g_sup, dim=0)
+        state['diag'] = (float(ratio), float(cos))
+        del g_sup, g_cons
+    n_sup = n_views if opt.fct_sup else 1
+    return torch.tensor(sup_sum / n_sup)
+
+
 def train(train_loader, model, optimizer, epoch, opt, state):
     model.train()
+    v2 = _fct_v2(opt)
     scaler = state.get('scaler')
     size_rates = [0.75, 1, 1.25] if opt.multiscale else [1]
     loss_record = AvgMeter()
@@ -266,7 +415,7 @@ def train(train_loader, model, optimizer, epoch, opt, state):
                 gts = F.upsample(gts, size=(trainsize, trainsize),
                                  mode='bilinear', align_corners=True)
 
-            do_fct = bool(opt.fct) and rate == 1
+            do_fct = bool(opt.fct) and (rate == 1 or v2 and opt.fct_all_scales)
             # Snapshot the RNG so every view of this sample can be given the
             # SAME stochastic-depth mask. Without this, f(x) and f(flip x) draw
             # independent DropPath masks and the consistency term measures that
@@ -278,14 +427,16 @@ def train(train_loader, model, optimizer, epoch, opt, state):
                 lam = opt.fct_weight
                 if opt.fct_warmup_iters > 0 and it < opt.fct_warmup_iters:
                     lam = opt.fct_weight * (it / float(opt.fct_warmup_iters))
-                state['iter'] += 1
+                # Warmup counts BATCHES: advance once per batch, at rate 1.
+                if rate == 1:
+                    state['iter'] += 1
 
-            def _bw(t):
+            def _bw(t, retain=False):
                 """Backward one term, accumulating into .grad."""
                 if scaler is not None:
-                    scaler.scale(t).backward()
+                    scaler.scale(t).backward(retain_graph=retain)
                 else:
-                    t.backward()
+                    t.backward(retain_graph=retain)
 
             # ---- supervised view ------------------------------------------
             with autocast(enabled=bool(opt.amp)):
@@ -296,7 +447,10 @@ def train(train_loader, model, optimizer, epoch, opt, state):
                 # freed immediately.
                 p_o = torch.sigmoid(P1 + P2) if do_fct else None
 
-            if do_fct and opt.fct_mode == 'seq':
+            if do_fct and v2:
+                loss = _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0,
+                                    opt, state, cons_record, _bw, rate == 1)
+            elif do_fct and opt.fct_mode == 'seq':
                 p_o = p_o.detach()
                 _bw(loss)                      # frees the supervised graph NOW
                 n = images.shape[0] if opt.fct_sub <= 0 else min(opt.fct_sub, images.shape[0])
@@ -343,7 +497,11 @@ def train(train_loader, model, optimizer, epoch, opt, state):
                    .format(datetime.now(), epoch, opt.epoch, i, state['total_step'],
                            loss_record.show()))
             if opt.fct:
-                msg += ', cons: {:0.5f}'.format(cons_record.show())
+                if opt.fct_weight > 0:
+                    lbl = 'cons_kl' if (v2 and opt.fct_loss == 'bce') else 'cons'
+                    msg += ', {}: {:0.5f}'.format(lbl, cons_record.show())
+                if state.get('diag') is not None:
+                    msg += ', |g_cons|/|g_sup|: {:0.3f}, cos: {:+0.3f}'.format(*state['diag'])
             print(msg)
 
     os.makedirs(opt.train_save, exist_ok=True)
@@ -414,6 +572,26 @@ if __name__ == '__main__':
                              "memory is essentially the no-FCT baseline. joint: one "
                              "backward over all views, gradients flow through both "
                              "sides of the MSE; ~3x the activation memory")
+    # --- FCT v2 (seq mode only). All defaults = the v1 behaviour above. ---
+    parser.add_argument('--fct_sup', type=int, default=0,
+                        help='1 = ALSO supervise the flipped views with structure_loss '
+                             'against the GT; every view weighted 1/n_views. This is '
+                             'deterministic flip augmentation, so run a --fct_weight 0 '
+                             'control alongside it')
+    parser.add_argument('--fct_loss', type=str, default='mse', choices=['mse', 'bce'],
+                        help='mse = sigmoid-space MSE (v1). bce = soft BCE on logits '
+                             'against the detached upright probability; no saturation '
+                             'on confident pixels')
+    parser.add_argument('--fct_weit', type=int, default=0,
+                        help='1 = weight the consistency per pixel by the structure_loss '
+                             'boundary weight 1 + 5|avgpool31(y) - y| (range 1..6), '
+                             'normalised per image. Uses the GT, so pair it with --fct_sup 1')
+    parser.add_argument('--fct_all_scales', type=int, default=0,
+                        help='1 = run the flipped views at every multi-scale rate, not '
+                             'only rate 1 (~3x the FCT cost)')
+    parser.add_argument('--grad_diag', type=int, default=0,
+                        help='every N batches, log |g_cons|/|g_sup| and their cosine '
+                             '(needs --fct_weight > 0); 0 = off')
     parser.add_argument('--fct_sub', type=int, default=0,
                         help='compute the consistency term on only the first N samples '
                              'of each batch (0 = whole batch). Cuts FCT memory without '
@@ -455,6 +633,12 @@ if __name__ == '__main__':
                         help='evaluate the 5 test sets every N epochs')
 
     opt = parser.parse_args()
+    if _fct_v2(opt) and opt.fct_mode != 'seq':
+        parser.error('--fct_sup/--fct_loss bce/--fct_weit/--fct_all_scales/--grad_diag '
+                     'are implemented for --fct_mode seq only')
+    if opt.fct_weit and not opt.fct_sup:
+        print('!! --fct_weit 1 without --fct_sup 1: the weight is built from the GT, so '
+              'labels reach the otherwise unsupervised flipped views.')
 
     logging.basicConfig(filename='train_log_noaug.log',
                         format='[%(asctime)s-%(filename)s-%(levelname)s:%(message)s]',
@@ -538,7 +722,16 @@ if __name__ == '__main__':
     # faithful to the released one, but stated here so nobody assumes a
     # schedule that is not running.
     print('  lr {} CONSTANT (no decay; --decay_rate/--decay_epoch are inert)'.format(opt.lr))
-    if opt.fct:
+    if opt.fct and _fct_v2(opt):
+        print('  FCT v2: flipped views supervised {}, consistency {} x {:.3f}{}, vflip {}, '
+              'warmup {}, all scales {}, sub {}, grad_diag {}'.format(
+                  bool(opt.fct_sup), opt.fct_loss, opt.fct_weight,
+                  ' (boundary-weighted)' if opt.fct_weit else '',
+                  bool(opt.fct_vflip), opt.fct_warmup_iters, bool(opt.fct_all_scales),
+                  opt.fct_sub or 'full batch', opt.grad_diag or 'off'))
+        if opt.fct_weight <= 0:
+            print('  (consistency OFF: this is the supervised-flips control)')
+    elif opt.fct:
         print('  FCT consistency-only: weight {:.3f}, vflip {}, warmup {}, sub {}'.format(
             opt.fct_weight, bool(opt.fct_vflip), opt.fct_warmup_iters,
             opt.fct_sub or 'full batch'))
