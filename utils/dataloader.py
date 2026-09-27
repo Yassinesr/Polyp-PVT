@@ -24,7 +24,13 @@ class PolypDataset(data.Dataset):
         if self.augmentations == 'True':
             print('Using RandomRotation, RandomFlip')
             self.img_transform = transforms.Compose([
-                transforms.RandomRotation(90, resample=False, expand=False, center=None, fill=None),
+                # `resample=` was removed from RandomRotation in torchvision
+                # 0.13 (deprecated in 0.10 in favour of `interpolation=`), so
+                # the stock call raises TypeError on any recent install. Every
+                # argument it passed was the default anyway -- resample=False,
+                # expand=False, center=None, fill=None -- so dropping them is
+                # behaviour-preserving AND works on old and new versions alike.
+                transforms.RandomRotation(90),
                 transforms.RandomVerticalFlip(p=0.5),
                 transforms.RandomHorizontalFlip(p=0.5),
                 transforms.Resize((self.trainsize, self.trainsize)),
@@ -32,7 +38,7 @@ class PolypDataset(data.Dataset):
                 transforms.Normalize([0.485, 0.456, 0.406],
                                      [0.229, 0.224, 0.225])])
             self.gt_transform = transforms.Compose([
-                transforms.RandomRotation(90, resample=False, expand=False, center=None, fill=None),
+                transforms.RandomRotation(90),
                 transforms.RandomVerticalFlip(p=0.5),
                 transforms.RandomHorizontalFlip(p=0.5),
                 transforms.Resize((self.trainsize, self.trainsize)),
