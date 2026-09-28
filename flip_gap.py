@@ -95,6 +95,8 @@ if __name__ == '__main__':
         model.load_state_dict(torch.load(ck, map_location='cpu'))
         model.cuda().eval()
         name = os.path.basename(os.path.normpath(p))
+        if os.path.isfile(p):                  # e.g. S3W05_1450/PolypPVT_ema.pth
+            name = '{}/{}'.format(os.path.basename(os.path.dirname(os.path.abspath(p))), name[:-4])
         print('== {}  ({})'.format(name, ck))
         per_set = {}
         for s in opt.sets:

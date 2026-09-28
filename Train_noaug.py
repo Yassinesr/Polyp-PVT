@@ -120,6 +120,7 @@ FCT v2 (seq mode only; every default keeps the v1 behaviour above)
 See run_fct_v2.sh for the arms, and flip_gap.py for the equivariance check.
 """
 import os
+import copy
 import argparse
 import logging
 from datetime import datetime
@@ -257,6 +258,18 @@ def _fct_v2(opt):
     """True when any v2 option is set; otherwise the v1 code path runs unchanged."""
     return bool(opt.fct) and bool(opt.fct_sup or opt.fct_loss != 'mse' or opt.fct_weit
                                   or opt.fct_all_scales or opt.grad_diag)
+
+
+@torch.no_grad()
+def _ema_update(ema, model, decay, step):
+    """Weight EMA. The decay ramps as min(decay, (1+t)/(10+t)), so the average
+    is not dominated by the random initial weights in the first epochs.
+    BatchNorm running statistics are copied from the live model."""
+    d = min(decay, (1.0 + step) / (10.0 + step))
+    for e, p in zip(ema.parameters(), model.parameters()):
+        e.mul_(d).add_(p.detach(), alpha=1.0 - d)
+    for e, b in zip(ema.buffers(), model.buffers()):
+        e.copy_(b)
 
 
 # ---------------------------------------------------------------- evaluation
@@ -488,6 +501,9 @@ def train(train_loader, model, optimizer, epoch, opt, state):
             else:
                 clip_gradient(optimizer, opt.clip)
                 optimizer.step()
+            if state.get('ema') is not None:
+                _ema_update(state['ema'], model, opt.ema, state['ema_step'])
+                state['ema_step'] += 1
 
             if rate == 1:
                 loss_record.update(loss.data, opt.batchsize)
@@ -510,6 +526,10 @@ def train(train_loader, model, optimizer, epoch, opt, state):
         torch.save(model.state_dict(),
                    os.path.join(opt.train_save, '{}PolypPVT.pth'.format(epoch)))
 
+    ema = state.get('ema')
+    if ema is not None:
+        torch.save(ema.state_dict(), os.path.join(opt.train_save, 'last_ema.pth'))
+
     if opt.eval_every > 1 and epoch % opt.eval_every != 0:
         return
     scores, meandice = evaluate_all(model, opt.test_path)
@@ -523,6 +543,18 @@ def train(train_loader, model, optimizer, epoch, opt, state):
         torch.save(model.state_dict(), os.path.join(opt.train_save, 'PolypPVT.pth'))
         print('#' * 30, 'best', meandice)
         logging.info('#' * 30 + 'best:{}'.format(meandice))
+
+    if ema is not None:
+        scores, meandice = evaluate_all(ema, opt.test_path)
+        for name, d in scores.items():
+            logging.info('EMA epoch: {}, dataset: {}, dice: {}'.format(epoch, name, d))
+            print('EMA', name, ': ', d)
+        print('EMA mean: ', meandice)
+        if meandice > state['best_ema']:
+            state['best_ema'] = meandice
+            torch.save(ema.state_dict(), os.path.join(opt.train_save, 'PolypPVT_ema.pth'))
+            print('#' * 30, 'EMA best', meandice)
+            logging.info('#' * 30 + 'EMA best:{}'.format(meandice))
 
 
 if __name__ == '__main__':
@@ -626,6 +658,9 @@ if __name__ == '__main__':
                              'its stock 0.1 instead of being switched off')
 
     # --- housekeeping ---
+    parser.add_argument('--ema', type=float, default=0.0,
+                        help='weight EMA decay, e.g. 0.999 (0 = off). Saves last_ema.pth '
+                             'every epoch and PolypPVT_ema.pth on the EMA best')
     parser.add_argument('--save_every_epoch', type=int, default=0,
                         help='1 = keep a checkpoint per epoch (~100MB x epochs). '
                              'Default keeps only best + last')
@@ -738,8 +773,15 @@ if __name__ == '__main__':
     else:
         print('  FCT: off')
 
+    print('  weight EMA: {}'.format(opt.ema if opt.ema > 0 else 'off'))
+
     state = {'best': 0.0, 'iter': 0, 'total_step': len(train_loader),
-             'scaler': GradScaler() if opt.amp else None}
+             'scaler': GradScaler() if opt.amp else None,
+             'ema': None, 'ema_step': 0, 'best_ema': 0.0}
+    if opt.ema > 0:
+        state['ema'] = copy.deepcopy(model).eval()
+        for _p in state['ema'].parameters():
+            _p.requires_grad_(False)
     for epoch in range(1, opt.epoch):
         adjust_lr(optimizer, opt.lr, epoch, 0.1, 200)
         train(train_loader, model, optimizer, epoch, opt, state)
