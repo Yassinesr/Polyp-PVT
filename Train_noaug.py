@@ -242,11 +242,22 @@ def _per_pixel_consistency(z_f, z_o, p_o, loss):
     return per, (per.detach() - ent)
 
 
-def _reduce(per, weit):
+def _reduce(per, weit, eps=0.0):
     """Mean over pixels, optionally weighted per image like structure_loss."""
     if weit is None:
         return per.mean()
-    return ((weit * per).sum(dim=(2, 3)) / weit.sum(dim=(2, 3))).mean()
+    return ((weit * per).sum(dim=(2, 3)) / (weit.sum(dim=(2, 3)) + eps)).mean()
+
+
+def _error_weight(p_o, mask):
+    """Per-pixel trust in the upright target: 1 - |p_o - y|.
+
+    1 where the upright prediction already matches the label, 0 where it is
+    completely wrong. The flipped views are then pulled toward the upright
+    prediction only where that prediction is right; where it is wrong they
+    are left to the supervised loss.
+    """
+    return (1.0 - (p_o - mask).abs()).clamp_(min=0.0)
 
 
 def _flat_grad(model):
@@ -348,7 +359,13 @@ def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
 
     z_o = (P1 + P2).detach().float()[:n]
     p_o = torch.sigmoid(z_o)
-    weit = _boundary_weight(gts[:n].float()) if opt.fct_weit else None
+    eps = 0.0
+    if opt.fct_weit == 1:
+        weit = _boundary_weight(gts[:n].float())
+    elif opt.fct_weit == 2:
+        weit, eps = _error_weight(p_o, gts[:n].float()), 1e-6
+    else:
+        weit = None
     _bw(sup_w * loss)                          # frees the upright graph NOW
     sup_sum = float(loss.detach())
 
@@ -370,8 +387,8 @@ def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
         cons_f = None
         if lam > 0:
             per, dis = _per_pixel_consistency(p1f + p2f, z_o, p_o, opt.fct_loss)
-            cons_f = _reduce(per, weit)
-            cons_sum += float(_reduce(dis, weit))
+            cons_f = _reduce(per, weit, eps)
+            cons_sum += float(_reduce(dis, weit, eps))
             cons_n += 1
 
         w_c = lam / len(flips)
@@ -614,10 +631,15 @@ if __name__ == '__main__':
                         help='mse = sigmoid-space MSE (v1). bce = soft BCE on logits '
                              'against the detached upright probability; no saturation '
                              'on confident pixels')
-    parser.add_argument('--fct_weit', type=int, default=0,
-                        help='1 = weight the consistency per pixel by the structure_loss '
-                             'boundary weight 1 + 5|avgpool31(y) - y| (range 1..6), '
-                             'normalised per image. Uses the GT, so pair it with --fct_sup 1')
+    parser.add_argument('--fct_weit', type=int, default=0, choices=[0, 1, 2],
+                        help='per-pixel consistency weight, normalised per image. '
+                             '0 = uniform. 1 = structure_loss boundary weight '
+                             '1 + 5|avgpool31(y) - y| (range 1..6). 2 = error-aware: '
+                             '1 - |p_o - y|, so pixels where the upright target is wrong '
+                             'are not used as targets. 1 and 2 use the GT: pair with --fct_sup 1')
+    parser.add_argument('--seed', type=int, default=-1,
+                        help='seed python/numpy/torch RNGs (-1 = unseeded, as before). '
+                             'cuDNN kernels can still make runs differ slightly')
     parser.add_argument('--fct_all_scales', type=int, default=0,
                         help='1 = run the flipped views at every multi-scale rate, not '
                              'only rate 1 (~3x the FCT cost)')
@@ -672,7 +694,7 @@ if __name__ == '__main__':
         parser.error('--fct_sup/--fct_loss bce/--fct_weit/--fct_all_scales/--grad_diag '
                      'are implemented for --fct_mode seq only')
     if opt.fct_weit and not opt.fct_sup:
-        print('!! --fct_weit 1 without --fct_sup 1: the weight is built from the GT, so '
+        print('!! --fct_weit without --fct_sup 1: the weight is built from the GT, so '
               'labels reach the otherwise unsupervised flipped views.')
 
     logging.basicConfig(filename='train_log_noaug.log',
@@ -693,6 +715,12 @@ if __name__ == '__main__':
         if not os.path.isdir(_d):
             raise FileNotFoundError('Missing test directory: {}'.format(_d))
 
+    if opt.seed >= 0:
+        import random
+        random.seed(opt.seed)
+        np.random.seed(opt.seed)
+        torch.manual_seed(opt.seed)
+        torch.cuda.manual_seed_all(opt.seed)
     model = PolypPVT().cuda()
 
     # Stochastic depth. Must be 0 for FCT to measure flip non-equivariance
@@ -761,7 +789,7 @@ if __name__ == '__main__':
         print('  FCT v2: flipped views supervised {}, consistency {} x {:.3f}{}, vflip {}, '
               'warmup {}, all scales {}, sub {}, grad_diag {}'.format(
                   bool(opt.fct_sup), opt.fct_loss, opt.fct_weight,
-                  ' (boundary-weighted)' if opt.fct_weit else '',
+                  {0: '', 1: ' (boundary-weighted)', 2: ' (error-weighted)'}[opt.fct_weit],
                   bool(opt.fct_vflip), opt.fct_warmup_iters, bool(opt.fct_all_scales),
                   opt.fct_sub or 'full batch', opt.grad_diag or 'off'))
         if opt.fct_weight <= 0:
