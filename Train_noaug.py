@@ -249,6 +249,11 @@ def _reduce(per, weit, eps=0.0):
     return ((weit * per).sum(dim=(2, 3)) / (weit.sum(dim=(2, 3)) + eps)).mean()
 
 
+def _wsum_reduce(per, w, denom):
+    """Per image sum(w * per) / denom, then the batch mean. denom is per image."""
+    return ((w * per).sum(dim=(2, 3)) / denom).mean()
+
+
 def _error_weight(p_o, mask):
     """Per-pixel trust in the upright target: 1 - |p_o - y|.
 
@@ -360,6 +365,9 @@ def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
     z_o = (P1 + P2).detach().float()[:n]
     p_o = torch.sigmoid(z_o)
     eps = 0.0
+    yb = (gts[:n].float() > 0.5).float()
+    gate_o = ((p_o > 0.5).float() == yb).float()      # 1 where the upright mask is right
+    hw = float(p_o.shape[-2] * p_o.shape[-1])
     if opt.fct_weit == 1:
         weit = _boundary_weight(gts[:n].float())
     elif opt.fct_weit == 2:
@@ -387,8 +395,21 @@ def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
         cons_f = None
         if lam > 0:
             per, dis = _per_pixel_consistency(p1f + p2f, z_o, p_o, opt.fct_loss)
-            cons_f = _reduce(per, weit, eps)
-            cons_sum += float(_reduce(dis, weit, eps))
+            if opt.fct_weit in (3, 4, 5):
+                if opt.fct_weit == 3:          # error gate, all pixels in the divisor
+                    w_v, den = gate_o, hw
+                elif opt.fct_weit == 4:        # boundary weight on the gate, divisor sum(b)
+                    b = _boundary_weight(gts[:n].float())
+                    w_v, den = b * gate_o, b.sum(dim=(2, 3))
+                else:                          # relative gate: upright closer to y than this view
+                    p_f = torch.sigmoid((p1f + p2f).detach().float())
+                    w_v = ((p_o - yb).abs() < (p_f - yb).abs()).float()
+                    den = hw
+                cons_f = _wsum_reduce(per, w_v, den)
+                cons_sum += float(_wsum_reduce(dis, w_v, den))
+            else:
+                cons_f = _reduce(per, weit, eps)
+                cons_sum += float(_reduce(dis, weit, eps))
             cons_n += 1
 
         w_c = lam / len(flips)
@@ -631,12 +652,15 @@ if __name__ == '__main__':
                         help='mse = sigmoid-space MSE (v1). bce = soft BCE on logits '
                              'against the detached upright probability; no saturation '
                              'on confident pixels')
-    parser.add_argument('--fct_weit', type=int, default=0, choices=[0, 1, 2],
-                        help='per-pixel consistency weight, normalised per image. '
-                             '0 = uniform. 1 = structure_loss boundary weight '
-                             '1 + 5|avgpool31(y) - y| (range 1..6). 2 = error-aware: '
-                             '1 - |p_o - y|, so pixels where the upright target is wrong '
-                             'are not used as targets. 1 and 2 use the GT: pair with --fct_sup 1')
+    parser.add_argument('--fct_weit', type=int, default=0, choices=[0, 1, 2, 3, 4, 5],
+                        help='per-pixel consistency weight. 0 = uniform. 1 = structure_loss '
+                             'boundary weight 1 + 5|avgpool31(y) - y| (range 1..6). '
+                             '2 = soft error weight 1 - |p_o - y|, divided by sum(w). '
+                             '3 = error gate: 1 where the upright mask (p_o > 0.5) is right, 0 '
+                             'where it is wrong, divided by all H*W pixels. 4 = boundary weight '
+                             'times the error gate, divided by sum(boundary weight). 5 = relative '
+                             'gate: 1 where the upright is closer to y than the flipped view, '
+                             'divided by H*W. All use the GT: pair with --fct_sup 1')
     parser.add_argument('--seed', type=int, default=-1,
                         help='seed python/numpy/torch RNGs (-1 = unseeded, as before). '
                              'cuDNN kernels can still make runs differ slightly')
@@ -789,7 +813,8 @@ if __name__ == '__main__':
         print('  FCT v2: flipped views supervised {}, consistency {} x {:.3f}{}, vflip {}, '
               'warmup {}, all scales {}, sub {}, grad_diag {}'.format(
                   bool(opt.fct_sup), opt.fct_loss, opt.fct_weight,
-                  {0: '', 1: ' (boundary-weighted)', 2: ' (error-weighted)'}[opt.fct_weit],
+                  {0: '', 1: ' (boundary-weighted)', 2: ' (error-weighted)', 3: ' (error-gated)',
+                   4: ' (boundary-weighted, error-gated)', 5: ' (relative-gated)'}[opt.fct_weit],
                   bool(opt.fct_vflip), opt.fct_warmup_iters, bool(opt.fct_all_scales),
                   opt.fct_sub or 'full batch', opt.grad_diag or 'off'))
         if opt.fct_weight <= 0:

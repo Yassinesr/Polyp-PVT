@@ -13,10 +13,16 @@
 #  s3err         FCT v2 with an error-aware per-pixel weight w = 1 - |p_o - y|:
 #                pixels where the upright prediction is wrong are not used as
 #                consistency targets
+#  s3gate        error gate: w = 1 where the upright mask is right, 0 where it is
+#                wrong; all pixels stay in the divisor (no re-normalisation)
+#  s3bgate       boundary weight times the error gate, divided by sum(boundary)
+#  s3rel         relative gate: w = 1 where the upright is closer to the label
+#                than the flipped view
+#  gate          inference only: gate_share.py on existing checkpoints
 #
 #  SEED=<n> sets --seed and appends _s<n> to the run name (default: unseeded).
 #
-#  Usage: bash run_1288.sh vanilla | vanilla_aug | s3f | s3err
+#  Usage: bash run_1288.sh vanilla | vanilla_aug | s3f | s3err | s3gate | s3bgate | s3rel | gate
 #         SEED=1 bash run_1288.sh s3err
 #         bash run_1288.sh all            # = s3err
 # =============================================================================
@@ -61,12 +67,21 @@ vanilla()     { train_arm PVT_VANILLA$SFX --orientation_aug 0 && infer_arm PVT_V
 vanilla_aug() { train_arm PVT_VANILLA_AUG$SFX --orientation_aug 1 && infer_arm PVT_VANILLA_AUG$SFX PolypPVT; }
 s3f()         { train_arm S3F$SFX $FCT --fct_weit 0 && infer_arm S3F$SFX PolypPVT; }
 s3err()       { train_arm S3ERR$SFX $FCT --fct_weit 2 && infer_arm S3ERR$SFX PolypPVT; }
+s3gate()      { train_arm S3GATE$SFX $FCT --fct_weit 3 && infer_arm S3GATE$SFX PolypPVT; }
+s3bgate()     { train_arm S3BGATE$SFX $FCT --fct_weit 4 && infer_arm S3BGATE$SFX PolypPVT; }
+s3rel()       { train_arm S3REL$SFX $FCT --fct_weit 5 && infer_arm S3REL$SFX PolypPVT; }
+gate()        { local ck=""; for a in S3F S3F_EMA S3W05 S3ERR; do [ -d "./model_pth/$a" ] && ck="$ck ./model_pth/$a"; done
+                python gate_share.py --pth_path $ck; }
 
 case "$STAGE" in
   vanilla)     vanilla ;;
   vanilla_aug) vanilla_aug ;;
   s3f)         s3f ;;
   s3err)       s3err ;;
+  s3gate)      s3gate ;;
+  s3bgate)     s3bgate ;;
+  s3rel)       s3rel ;;
+  gate)        gate; exit 0 ;;
   all)         s3err ;;
   *)           echo "unknown stage: $STAGE"; exit 1 ;;
 esac
