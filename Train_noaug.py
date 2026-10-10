@@ -395,9 +395,12 @@ def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
         cons_f = None
         if lam > 0:
             per, dis = _per_pixel_consistency(p1f + p2f, z_o, p_o, opt.fct_loss)
-            if opt.fct_weit in (3, 4, 5):
+            if opt.fct_weit in (3, 4, 5, 6):
                 if opt.fct_weit == 3:          # error gate, all pixels in the divisor
                     w_v, den = gate_o, hw
+                elif opt.fct_weit == 6:        # wrong pixels: 1 + p_o on missed polyp, 1 - p_o on false positives
+                    w_v = gate_o + (1.0 - gate_o) * (1.0 + (2.0 * yb - 1.0) * p_o)
+                    den = hw
                 elif opt.fct_weit == 4:        # boundary weight on the gate, divisor sum(b)
                     b = _boundary_weight(gts[:n].float())
                     w_v, den = b * gate_o, b.sum(dim=(2, 3))
@@ -652,7 +655,7 @@ if __name__ == '__main__':
                         help='mse = sigmoid-space MSE (v1). bce = soft BCE on logits '
                              'against the detached upright probability; no saturation '
                              'on confident pixels')
-    parser.add_argument('--fct_weit', type=int, default=0, choices=[0, 1, 2, 3, 4, 5],
+    parser.add_argument('--fct_weit', type=int, default=0, choices=[0, 1, 2, 3, 4, 5, 6],
                         help='per-pixel consistency weight. 0 = uniform. 1 = structure_loss '
                              'boundary weight 1 + 5|avgpool31(y) - y| (range 1..6). '
                              '2 = soft error weight 1 - |p_o - y|, divided by sum(w). '
@@ -660,7 +663,9 @@ if __name__ == '__main__':
                              'where it is wrong, divided by all H*W pixels. 4 = boundary weight '
                              'times the error gate, divided by sum(boundary weight). 5 = relative '
                              'gate: 1 where the upright is closer to y than the flipped view, '
-                             'divided by H*W. All use the GT: pair with --fct_sup 1')
+                             'divided by H*W. 6 = like 3, but the wrong pixels keep a weight '
+                             'of 1 + p_o where y = 1 (missed polyp) and 1 - p_o where y = 0 '
+                             '(false positive), divided by H*W. All use the GT: pair with --fct_sup 1')
     parser.add_argument('--seed', type=int, default=-1,
                         help='seed python/numpy/torch RNGs (-1 = unseeded, as before). '
                              'cuDNN kernels can still make runs differ slightly')
@@ -814,7 +819,8 @@ if __name__ == '__main__':
               'warmup {}, all scales {}, sub {}, grad_diag {}'.format(
                   bool(opt.fct_sup), opt.fct_loss, opt.fct_weight,
                   {0: '', 1: ' (boundary-weighted)', 2: ' (error-weighted)', 3: ' (error-gated)',
-                   4: ' (boundary-weighted, error-gated)', 5: ' (relative-gated)'}[opt.fct_weit],
+                   4: ' (boundary-weighted, error-gated)', 5: ' (relative-gated)',
+                   6: ' (wrong pixels weighted 1 +/- p_o)'}[opt.fct_weit],
                   bool(opt.fct_vflip), opt.fct_warmup_iters, bool(opt.fct_all_scales),
                   opt.fct_sub or 'full batch', opt.grad_diag or 'off'))
         if opt.fct_weight <= 0:
