@@ -218,12 +218,15 @@ def flip_consistency(model, images, p_o, use_vflip=True, rng0=None):
     return cons
 
 
-def _per_pixel_consistency(z_f, z_o, p_o, loss):
+def _per_pixel_consistency(z_f, z_o, p_o, loss, gate=None, y=None):
     """Per-pixel disagreement between a flipped-back view and the upright target.
 
     z_f  logits P1+P2 of the flipped view, already flipped back (has grad)
     z_o  detached logits of the upright view
     p_o  detached sigmoid(z_o)
+    gate, y  optional (--fct_weit 7): where gate = 0 the upright mask is wrong,
+         and the target there is the binarised label y instead of p_o. A weight
+         only scales the pull toward the target; it cannot change its direction.
 
     mse  (sigmoid(z_f) - p_o)^2. Its gradient carries a sigmoid'(z_f) factor,
          so confident pixels -- including confidently WRONG ones -- get almost
@@ -234,11 +237,14 @@ def _per_pixel_consistency(z_f, z_o, p_o, loss):
          BCE(z_f, p_o) - BCE(z_o, p_o) is the KL part (the raw BCE never falls
          below the entropy of p_o, so it looks stuck in the log).
     """
+    t = p_o if gate is None else gate * p_o + (1.0 - gate) * y
     if loss == 'mse':
-        per = (torch.sigmoid(z_f.float()) - p_o.float()) ** 2
+        per = (torch.sigmoid(z_f.float()) - t.float()) ** 2
         return per, per.detach()
-    per = F.binary_cross_entropy_with_logits(z_f.float(), p_o.float(), reduction='none')
+    per = F.binary_cross_entropy_with_logits(z_f.float(), t.float(), reduction='none')
     ent = F.binary_cross_entropy_with_logits(z_o.float(), p_o.float(), reduction='none')
+    if gate is not None:
+        ent = gate * ent                       # a 0/1 label target has zero entropy
     return per, (per.detach() - ent)
 
 
@@ -394,11 +400,12 @@ def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
                 sup_f = structure_loss(p1f, gts[:n]) + structure_loss(p2f, gts[:n])
         cons_f = None
         if lam > 0:
-            per, dis = _per_pixel_consistency(p1f + p2f, z_o, p_o, opt.fct_loss)
-            if opt.fct_weit in (3, 4, 5, 6):
+            fix = (gate_o, yb) if opt.fct_weit == 7 else (None, None)
+            per, dis = _per_pixel_consistency(p1f + p2f, z_o, p_o, opt.fct_loss, *fix)
+            if opt.fct_weit in (3, 4, 5, 6, 7):
                 if opt.fct_weit == 3:          # error gate, all pixels in the divisor
                     w_v, den = gate_o, hw
-                elif opt.fct_weit == 6:        # wrong pixels: 1 + p_o on missed polyp, 1 - p_o on false positives
+                elif opt.fct_weit in (6, 7):   # wrong pixels: 1 + p_o on missed polyp, 1 - p_o on false positives
                     w_v = gate_o + (1.0 - gate_o) * (1.0 + (2.0 * yb - 1.0) * p_o)
                     den = hw
                 elif opt.fct_weit == 4:        # boundary weight on the gate, divisor sum(b)
@@ -655,7 +662,7 @@ if __name__ == '__main__':
                         help='mse = sigmoid-space MSE (v1). bce = soft BCE on logits '
                              'against the detached upright probability; no saturation '
                              'on confident pixels')
-    parser.add_argument('--fct_weit', type=int, default=0, choices=[0, 1, 2, 3, 4, 5, 6],
+    parser.add_argument('--fct_weit', type=int, default=0, choices=[0, 1, 2, 3, 4, 5, 6, 7],
                         help='per-pixel consistency weight. 0 = uniform. 1 = structure_loss '
                              'boundary weight 1 + 5|avgpool31(y) - y| (range 1..6). '
                              '2 = soft error weight 1 - |p_o - y|, divided by sum(w). '
@@ -665,7 +672,9 @@ if __name__ == '__main__':
                              'gate: 1 where the upright is closer to y than the flipped view, '
                              'divided by H*W. 6 = like 3, but the wrong pixels keep a weight '
                              'of 1 + p_o where y = 1 (missed polyp) and 1 - p_o where y = 0 '
-                             '(false positive), divided by H*W. All use the GT: pair with --fct_sup 1')
+                             '(false positive), divided by H*W. 7 = the weights of 6, but on the '
+                             'wrong pixels the target is the label y instead of the wrong upright '
+                             'prediction. All use the GT: pair with --fct_sup 1')
     parser.add_argument('--seed', type=int, default=-1,
                         help='seed python/numpy/torch RNGs (-1 = unseeded, as before). '
                              'cuDNN kernels can still make runs differ slightly')
@@ -820,7 +829,8 @@ if __name__ == '__main__':
                   bool(opt.fct_sup), opt.fct_loss, opt.fct_weight,
                   {0: '', 1: ' (boundary-weighted)', 2: ' (error-weighted)', 3: ' (error-gated)',
                    4: ' (boundary-weighted, error-gated)', 5: ' (relative-gated)',
-                   6: ' (wrong pixels weighted 1 +/- p_o)'}[opt.fct_weit],
+                   6: ' (wrong pixels weighted 1 +/- p_o)',
+                   7: ' (wrong pixels weighted 1 +/- p_o, label target)'}[opt.fct_weit],
                   bool(opt.fct_vflip), opt.fct_warmup_iters, bool(opt.fct_all_scales),
                   opt.fct_sub or 'full batch', opt.grad_diag or 'off'))
         if opt.fct_weight <= 0:
