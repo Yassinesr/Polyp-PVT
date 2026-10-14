@@ -1,16 +1,15 @@
 """Per-image Dice across runs: is FCT's ColonDB / CVC-300 shortfall systematic, or run noise?
 
 Reads the maps Test_tta.py saved (result_map/<run>/<set>/<image>.png) and the ground truth, so it
-needs no GPU and no checkpoints. For every image and run it computes
+needs no GPU and no checkpoints. Every image is scored with eval_dice.py, the Python port of the
+MATLAB evaluation the Polyp-PVT paper used:
 
-    meandic   mean Dice over the 256 thresholds t = 0..255 (pred >= t), PraNet-style meanDic
-    dice05    Dice at 0.5 (pred >= 128)
+    meandic   mean Dice over the 256 thresholds (what the paper reports as mDic)
+    dice05    Dice with the map thresholded at 0.5
 
-and reports:
+and it reports:
 
-  1. SANITY  each run's set means next to the numbers your evaluator gave. Shows which Dice
-             definition matches your evaluator, and whether the maps on disk are the ones that
-             were scored (the PVT_VANILLA_s1 maps may have been replaced by the stopped re-run).
+  1. SCORES  each run's set means (identical to eval_dice.py).
   2. GAP     per set, the FCT runs' mean minus the vanilla runs' mean, overall and by polyp size,
              with an exact permutation p-value: the real labelling against every way of calling
              len(--vanilla) of the runs 'vanilla'. A large p means the gap is what run-to-run
@@ -36,97 +35,39 @@ import itertools
 
 import numpy as np
 
-try:
-    import cv2
-except ImportError:                      # plain PIL works too, e.g. on the evaluation machine
-    cv2 = None
-    from PIL import Image
+import eval_dice
+from eval_dice import TESTSETS, SHORT, EXTS, gt_dir, read_gt, read_map, image_scores
 
-TESTSETS = ['Kvasir', 'CVC-ClinicDB', 'CVC-ColonDB', 'CVC-300', 'ETIS-LaribPolypDB']
-SHORT = {'Kvasir': 'Kvasir', 'CVC-ClinicDB': 'ClinicDB', 'CVC-ColonDB': 'ColonDB',
-         'CVC-300': 'CVC-300', 'ETIS-LaribPolypDB': 'ETIS'}
-KEYS = ['meandic', 'dice05', 'fn', 'fp']
+KEYS = ['meandic', 'meaniou', 'dice05', 'fn', 'fp']
 
-# What your evaluator reported for each run, in TESTSETS order.
-EVALUATOR = {
-    'PVT_VANILLA':    (0.9153, 0.9293, 0.7957, 0.9041, 0.8072),
-    'PVT_VANILLA_s1': (0.9100, 0.9155, 0.8062, 0.8931, 0.7823),
-    'S3':             (0.9210, 0.9237, 0.8002, 0.8867, 0.8136),
-    'S3W2':           (0.9020, 0.9265, 0.7940, 0.8885, 0.8152),
-    'S3W05':          (0.9177, 0.9346, 0.8048, 0.8935, 0.8182),
-    'S3F':            (0.9212, 0.9391, 0.8026, 0.8956, 0.8215),
-    'S3F_EMA':        (0.9144, 0.9424, 0.7862, 0.9032, 0.7984),
-    'S3ERR':          (0.9170, 0.9380, 0.7857, 0.9078, 0.8059),
-    'S3GATE_s1':      (0.9248, 0.9346, 0.8003, 0.9018, 0.7943),
-    'S3BGATE_s1':     (0.9130, 0.9324, 0.7926, 0.8927, 0.8257),
-    'S3SIG_s1':       (0.9189, 0.9390, 0.7986, 0.8956, 0.8065),
-    'S3SIGY':         (0.9217, 0.9096, 0.7944, 0.8901, 0.8173),
-    'S3SIGY_s1':      (0.9201, 0.9294, 0.8035, 0.8875, 0.8209),
-}
 VANILLA = ['PVT_VANILLA', 'PVT_VANILLA_s1']
 FCT = ['S3', 'S3W2', 'S3W05', 'S3F', 'S3F_EMA', 'S3ERR', 'S3GATE_s1', 'S3BGATE_s1',
        'S3SIG_s1', 'S3SIGY', 'S3SIGY_s1']
 MISS = 0.1                               # Dice at 0.5 below this = the polyp was missed
 
 
-def _read_gray(path):
-    if cv2 is not None:
-        a = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-        if a is None:
-            raise IOError('cannot read ' + path)
-        return a
-    return np.asarray(Image.open(path).convert('L'))
-
-
-def _resize(a, shape):
-    if cv2 is not None:
-        return cv2.resize(a, (shape[1], shape[0]), interpolation=cv2.INTER_LINEAR)
-    return np.asarray(Image.fromarray(a).resize((shape[1], shape[0]), Image.BILINEAR))
-
-
-def image_scores(pred, gt):
-    """Dice of one saved map against its mask.
-
-    The maps are min-max normalised probabilities x 255, so the threshold t on the 0..255 grid
-    is the evaluator's threshold t/255. Two 256-bin histograms give the Dice at all 256
-    thresholds at once: tp[t] / fp[t] = polyp / background pixels with pred >= t.
-    fn and fp are the missed and the false-positive area at 0.5, as fractions of the polyp area.
-    """
-    pos = np.bincount(pred[gt], minlength=256)
-    neg = np.bincount(pred[~gt], minlength=256)
-    tp = np.cumsum(pos[::-1])[::-1].astype(np.float64)
-    fp = np.cumsum(neg[::-1])[::-1].astype(np.float64)
-    p = float(gt.sum())
-    dice = 2.0 * tp / (tp + fp + p + 1e-8)          # 2TP / (2TP + FP + FN)
-    t = 128                                          # pred >= 128  <=>  pred / 255 > 0.5
-    return {'meandic': float(dice.mean()), 'dice05': float(dice[t]),
-            'fn': (p - tp[t]) / max(p, 1.0), 'fp': fp[t] / max(p, 1.0)}
-
-
 def load_set(opt, s, runs):
     """Per-image scores of every run on one set, on the images all runs have."""
-    gt_dir = os.path.join(opt.gt_root, s, 'masks')
-    if not os.path.isdir(gt_dir):
-        gt_dir = os.path.join(opt.gt_root, s, 'gt')
-    gts = {os.path.splitext(f)[0]: f for f in os.listdir(gt_dir)
-           if f.lower().endswith(('.png', '.tif', '.jpg', '.bmp'))}
+    gd = gt_dir(opt.gt_root, s)
+    gts = {os.path.splitext(f)[0]: f for f in os.listdir(gd) if f.lower().endswith(EXTS)}
     have = {}
     for r in runs:
         d = os.path.join(opt.result_root, r, s)
-        have[r] = {os.path.splitext(f)[0] for f in os.listdir(d)} if os.path.isdir(d) else set()
+        have[r] = {os.path.splitext(f)[0]: os.path.join(d, f) for f in os.listdir(d)
+                   if f.lower().endswith(EXTS)} if os.path.isdir(d) else {}
     names = [n for n in sorted(gts) if all(n in have[r] for r in runs)]
     area = np.zeros(len(names))
     sc = {k: np.zeros((len(runs), len(names))) for k in KEYS}
     resized = 0
     for j, n in enumerate(names):
-        gt = _read_gray(os.path.join(gt_dir, gts[n])) > 127
+        gt = read_gt(os.path.join(gd, gts[n]))
         area[j] = gt.mean()
         for i, r in enumerate(runs):
-            pred = _read_gray(os.path.join(opt.result_root, r, s, n + '.png'))
-            if pred.shape != gt.shape:
-                pred, resized = _resize(pred, gt.shape), resized + 1
-            for k, v in image_scores(pred, gt).items():
-                sc[k][i, j] = v
+            m, rs = read_map(have[r][n], gt.shape)
+            resized += rs
+            res = image_scores(m, gt)
+            for k in KEYS:
+                sc[k][i, j] = res[k]
     return names, area, sc, len(gts) - len(names), resized
 
 
@@ -166,43 +107,14 @@ def n_win(v, f):
     return int((f.min(0) > v.max(0)).sum())
 
 
-def sanity(results, runs, sets):
-    """Set means per run against the evaluator; returns the metric that matches it best."""
-    print('\n1. SANITY  set means per run: meandic | dice05 | evaluator (max |diff| per metric)')
-    dev = {'meandic': [], 'dice05': []}
+def scores_table(results, runs, sets):
+    """Set means per run, the same numbers eval_dice.py prints."""
+    print('\n1. SCORES  meanDic (mean Dice over 256 thresholds, as in the Polyp-PVT paper)')
+    print('  {:<15s}'.format('') + ''.join('{:>9s}'.format(SHORT[s]) for s in sets) + '     mean')
     for i, r in enumerate(runs):
-        row, ev = [], EVALUATOR.get(r)
-        dmax = {'meandic': 0.0, 'dice05': 0.0}
-        for s in sets:
-            sc = results[s][2]
-            a, b = sc['meandic'][i].mean(), sc['dice05'][i].mean()
-            if ev is not None:
-                e = ev[TESTSETS.index(s)]
-                for k, x in (('meandic', a), ('dice05', b)):
-                    dev[k].append(abs(x - e))
-                    dmax[k] = max(dmax[k], abs(x - e))
-                row.append('{} {:.4f}|{:.4f}|{:.4f}'.format(SHORT[s], a, b, e))
-            else:
-                row.append('{} {:.4f}|{:.4f}|  -   '.format(SHORT[s], a, b))
-        tail = '' if ev is None else '  max|d| {:.4f} / {:.4f}'.format(dmax['meandic'], dmax['dice05'])
-        print('  {:<15s} {}{}'.format(r, '  '.join(row), tail))
-    if not dev['meandic']:
-        return 'meandic'
-    best = min(dev, key=lambda k: np.median(dev[k]))
-    print('  -> analysis uses {} (median |diff| to your evaluator: meandic {:.4f}, dice05 {:.4f})'.format(
-        best, np.median(dev['meandic']), np.median(dev['dice05'])))
-    off = []
-    for i, r in enumerate(runs):
-        ev = EVALUATOR.get(r)
-        if ev is None:
-            continue
-        d = max(abs(results[s][2][best][i].mean() - ev[TESTSETS.index(s)]) for s in sets)
-        if d > 0.002:
-            off.append('{} ({:.4f})'.format(r, d))
-    if off:
-        print('  !! maps differ from your evaluator by more than 0.002 for: {}. They may come from '
-              'another checkpoint; point --result_root at the maps you scored.'.format(', '.join(off)))
-    return best
+        vals = [results[s][2]['meandic'][i].mean() for s in sets]
+        print('  {:<15s}'.format(r) + ''.join('{:>9.4f}'.format(v) for v in vals) +
+              '{:>9.4f}'.format(np.mean(vals)))
 
 
 def report_set(s, names, area, sc, combs, metric, show):
@@ -303,13 +215,15 @@ if __name__ == '__main__':
     parser.add_argument('--sets', type=str, nargs='+', default=TESTSETS)
     parser.add_argument('--focus', type=str, nargs='+', default=['CVC-ColonDB', 'CVC-300'],
                         help='sets whose individual images are listed')
-    parser.add_argument('--metric', type=str, default='auto', choices=['auto', 'meandic', 'dice05'],
-                        help='auto = whichever matches your evaluator best (see SANITY)')
+    parser.add_argument('--metric', type=str, default='meandic', choices=['meandic', 'dice05'])
+    parser.add_argument('--thresholds', type=str, default='matlab', choices=['matlab', 'linspace'],
+                        help='see eval_dice.py')
     parser.add_argument('--bar', type=str, nargs=2, default=['S3SIGY_s1', 'PVT_VANILLA_s1'],
                         metavar=('FCT_RUN', 'VANILLA_RUN'))
     parser.add_argument('--max_labelings', type=int, default=20000)
     parser.add_argument('--out', type=str, default='per_image_dice.csv')
     opt = parser.parse_args()
+    eval_dice.set_thresholds(opt.thresholds)
 
     found = lambda r: os.path.isdir(os.path.join(opt.result_root, r))
     for r in opt.vanilla + opt.fct:
@@ -329,8 +243,8 @@ if __name__ == '__main__':
                                           ', {} skipped (not in every run)'.format(missing) if missing else '',
                                           ', {} maps resized to the mask size'.format(resized) if resized else ''))
 
-    best = sanity(results, runs, opt.sets)
-    metric = best if opt.metric == 'auto' else opt.metric
+    scores_table(results, runs, opt.sets)
+    metric = opt.metric
     combs = labelings(len(runs), len(van), opt.max_labelings)
     print('\n2-3. FCT ({} runs) vs vanilla ({} runs) on {}; p-values are exact over {} labellings '
           '(smallest possible p {:.3f})'.format(len(fct), len(van), metric, len(combs), 1.0 / len(combs)))
