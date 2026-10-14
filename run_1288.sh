@@ -25,13 +25,15 @@
 #  gate          inference only: gate_share.py on existing checkpoints
 #
 #  SEED=<n> sets --seed and appends _s<n> to the run name (default: unseeded).
+#  pipefail: a training run that crashes or is killed returns non-zero, so its
+#  (partial or stale) checkpoint is not scored.
 #
 #  Usage: bash run_1288.sh vanilla | vanilla_aug | s3f | s3err | s3gate | s3bgate | s3rel | s3sig
 #                          | s3sigy | gate
 #         SEED=1 bash run_1288.sh s3err
 #         bash run_1288.sh all            # = s3err
 # =============================================================================
-set -u
+set -u -o pipefail
 STAGE="${1:-all}"
 SEED="${SEED:-}"
 SFX=""; SEEDFLAG=""
