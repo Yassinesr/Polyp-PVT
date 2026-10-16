@@ -36,7 +36,7 @@ import itertools
 import numpy as np
 
 import eval_dice
-from eval_dice import TESTSETS, SHORT, EXTS, gt_dir, read_gt, read_map, image_scores
+from eval_dice import TESTSETS, short, EXTS, gt_dir, read_gt, read_map, image_scores
 
 KEYS = ['meandic', 'meaniou', 'dice05', 'fn', 'fp']
 
@@ -110,7 +110,7 @@ def n_win(v, f):
 def scores_table(results, runs, sets):
     """Set means per run, the same numbers eval_dice.py prints."""
     print('\n1. SCORES  meanDic (mean Dice over 256 thresholds, as in the Polyp-PVT paper)')
-    print('  {:<15s}'.format('') + ''.join('{:>9s}'.format(SHORT[s]) for s in sets) + '     mean')
+    print('  {:<15s}'.format('') + ''.join('{:>9s}'.format(short(s)) for s in sets) + '     mean')
     for i, r in enumerate(runs):
         vals = [results[s][2]['meandic'][i].mean() for s in sets]
         print('  {:<15s}'.format(r) + ''.join('{:>9.4f}'.format(v) for v in vals) +
@@ -123,7 +123,7 @@ def report_set(s, names, area, sc, combs, metric, show):
     d = f.mean(0) - v.mean(0)                        # per image, FCT mean - vanilla mean
     g = d.mean()
     print('\n== {}  ({} images; vanilla {:.4f}, FCT {:.4f}, gap {:+.4f}, permutation p {:.3f})'.format(
-        SHORT[s], len(names), v.mean(), f.mean(), g, perm_p(gap, m, combs, True)))
+        short(s), len(names), v.mean(), f.mean(), g, perm_p(gap, m, combs, True)))
 
     # where the gap comes from
     o = np.argsort(d)
@@ -184,7 +184,7 @@ def report_bar(s, names, area, sc, runs, metric, fr, vr, show):
     worst, best = e[o[:k]].sum() / len(e), e[o[-k:]].sum() / len(e)
     miss = (sc['dice05'] < MISS).sum(1)
     print('  {}: {:+.4f}  = {} worst images {:+.4f}, {} best {:+.4f}, other {} {:+.4f};  complete '
-          'misses {} vs {}'.format(SHORT[s], e.mean(), k, worst, k, best, len(e) - 2 * k,
+          'misses {} vs {}'.format(short(s), e.mean(), k, worst, k, best, len(e) - 2 * k,
                                    e.mean() - worst - best, miss[i], miss[j]))
     for t in (o[:5] if show else []):
         print('      {:<24s} polyp {:5.1f}%  {} {:.3f}  {} {:.3f}  ({} at 0.5: missed {:.2f}, '
@@ -201,7 +201,7 @@ def write_csv(path, results, runs, n_v, sets):
             names, area, sc, _, _ = results[s]
             for j, n in enumerate(names):
                 for i, r in enumerate(runs):
-                    w.writerow([SHORT[s], n, '{:.5f}'.format(area[j]), r,
+                    w.writerow([short(s), n, '{:.5f}'.format(area[j]), r,
                                 'vanilla' if i < n_v else 'fct'] +
                                ['{:.5f}'.format(sc[k][i, j]) for k in KEYS])
 
@@ -239,7 +239,7 @@ if __name__ == '__main__':
     for s in opt.sets:
         results[s] = load_set(opt, s, runs)
         names, _, _, missing, resized = results[s]
-        print('{}: {} images{}{}'.format(SHORT[s], len(names),
+        print('{}: {} images{}{}'.format(short(s), len(names),
                                           ', {} skipped (not in every run)'.format(missing) if missing else '',
                                           ', {} maps resized to the mask size'.format(resized) if resized else ''))
 

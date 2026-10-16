@@ -27,7 +27,7 @@ import itertools
 
 import numpy as np
 
-from eval_dice import TESTSETS, SHORT, score_run, set_thresholds
+from eval_dice import TESTSETS, short, score_run, set_thresholds
 
 
 def _betacf(a, b, x):
@@ -104,19 +104,29 @@ if __name__ == '__main__':
     parser.add_argument('--result_root', type=str, default='./result_map')
     parser.add_argument('--gt_root', type=str, default='./dataset/TestDataset')
     parser.add_argument('--thresholds', type=str, default='matlab', choices=['matlab', 'linspace'])
+    parser.add_argument('--sets', type=str, nargs='+', default=TESTSETS,
+                        help='test-set folders under --gt_root (default: the five benchmark sets)')
+    parser.add_argument('--pooled', action='store_true',
+                        help='last column = every image of the sets pooled (image-weighted mean), '
+                             'instead of the plain mean of the set scores')
     opt = parser.parse_args()
     set_thresholds(opt.thresholds)
     va, fa = opt.arms
-    cols = [SHORT[s] for s in TESTSETS] + ['mean']
+    sets, k = opt.sets, len(opt.sets)
+    cols = [short(s) for s in sets] + ['pooled' if opt.pooled else 'mean']
 
     def score(run):
         if not os.path.isdir(os.path.join(opt.result_root, run)):
             return None
-        res = score_run(opt.gt_root, opt.result_root, run, TESTSETS)
-        if len(res) < len(TESTSETS):
+        res = score_run(opt.gt_root, opt.result_root, run, sets)
+        if len(res) < k:
             return None
-        vals = [res[s][0] for s in TESTSETS]
-        return np.array(vals + [float(np.mean(vals))])
+        vals = [res[s][0] for s in sets]
+        if opt.pooled:          # meanDic is a mean over images, so pooling = weighting by image count
+            last = sum(res[s][0] * res[s][2] for s in sets) / sum(res[s][2] for s in sets)
+        else:
+            last = float(np.mean(vals))
+        return np.array(vals + [last])
 
     seeds = sorted(set(opt.seeds) | {1})
     sc = {(a, s): score('{}_s{}'.format(a, s)) for a in (va, fa) for s in seeds}
@@ -155,15 +165,15 @@ if __name__ == '__main__':
             lo, hi, t_pvalue(t, n - 1) if se > 0 else 0.0, perm_pvalue(F[:, j], V[:, j]),
             int((np.round(d, 4) > 0).sum()), n, 'yes' if lo > 0 else 'no'))
 
-    print('\nyour goal (all 5 sets won, one by >= 0.001):')
-    for k, s in enumerate(primary):
-        w, ok = won(D[k, :5])
-        print('  seed {}: won {}/5{}'.format(s, w, '   GOAL MET' if ok else ''))
-    w, ok = won(F[:, :5].mean(0) - V[:, :5].mean(0))
-    print('  seed means: won {}/5{}'.format(w, '   GOAL MET' if ok else ''))
+    print('\nyour goal (all {} sets won, one by >= 0.001):'.format(k))
+    for i, s in enumerate(primary):
+        w, ok = won(D[i, :k])
+        print('  seed {}: won {}/{}{}'.format(s, w, k, '   GOAL MET' if ok else ''))
+    w, ok = won(F[:, :k].mean(0) - V[:, :k].mean(0))
+    print('  seed means: won {}/{}{}'.format(w, k, '   GOAL MET' if ok else ''))
 
     if 1 not in opt.seeds and sc[(va, 1)] is not None and sc[(fa, 1)] is not None:
         d1 = sc[(fa, 1)] - sc[(va, 1)]
-        w, ok = won(d1[:5])
+        w, ok = won(d1[:k])
         print('\nseed 1 (not in the statistics): ' + ' '.join('{} {:+.4f}'.format(c, x) for c, x in zip(cols, d1)) +
-              '   won {}/5{}'.format(w, '   GOAL MET' if ok else ''))
+              '   won {}/{}{}'.format(w, k, '   GOAL MET' if ok else ''))

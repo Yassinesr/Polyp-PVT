@@ -107,6 +107,8 @@ if __name__ == '__main__':
     parser.add_argument('--pth_path', type=str, default='./model_pth/PolypPVT.pth')
     parser.add_argument('--data_root', type=str, default='./dataset/TestDataset')
     parser.add_argument('--save_root', type=str, default='./result_map/PolypPVT_TTA')
+    parser.add_argument('--sets', type=str, nargs='+', default=TESTSETS,
+                        help='test-set folders under --data_root, each with images/ and masks/')
     parser.add_argument('--views', type=int, default=4, choices=[1, 4],
                         help='4 = flip TTA, 1 = plain inference (for an A/B on one script)')
     parser.add_argument('--single_view', type=str, default='none',
@@ -129,7 +131,7 @@ if __name__ == '__main__':
     else:
         print('views:', opt.views, '| out:', opt.save_root)
 
-    for name in TESTSETS:
+    for name in opt.sets:
         data_path = os.path.join(opt.data_root, name)
         save_path = os.path.join(opt.save_root, name)
         os.makedirs(save_path, exist_ok=True)

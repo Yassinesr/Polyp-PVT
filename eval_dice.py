@@ -45,6 +45,11 @@ SHORT = {'Kvasir': 'Kvasir', 'CVC-ClinicDB': 'ClinicDB', 'CVC-ColonDB': 'ColonDB
          'CVC-300': 'CVC-300', 'ETIS-LaribPolypDB': 'ETIS'}
 EXTS = ('.png', '.tif', '.tiff', '.jpg', '.jpeg', '.bmp')
 
+
+def short(s):
+    """Column label for a test set: the usual short name, or PG-C1 for PolypGen_C1."""
+    return SHORT.get(s, s.replace('PolypGen_', 'PG-'))
+
 # main.m's Thresholds = 1:-1/255:0, built the way MATLAB's colon operator builds it: the first half
 # as a + k*d and the second half as b - k*d, so a value can differ from k/255 in the last bit.
 _D = -(1.0 / 255.0)
@@ -205,7 +210,7 @@ if __name__ == '__main__':
     sets = [s for s in opt.sets if all(s in v for v in scores.values())]
     if not scores or not sets:
         raise SystemExit('nothing scored')
-    head = ''.join('{:>9s}'.format(SHORT[s]) for s in sets)
+    head = ''.join('{:>9s}'.format(short(s)) for s in sets)
     print('\nmeanDic' + ' ' * 18 + head + '     mean')
     for r, res in scores.items():
         vals = [res[s][0] for s in sets]
