@@ -24,10 +24,26 @@
 #
 #  Usage: bash run_seeds.sh              # seeds 2 3 4 5 6
 #         bash run_seeds.sh 2 3 4        # other seeds
+#
+#  Other arms: ARMS lists run_1288.sh stages (default "vanilla s3sig"). Runs that
+#  already finished are skipped, so this trains only S3LM on seeds 1-6 and then
+#  compares it with vanilla:
+#      ARMS="vanilla s3lm" nohup bash run_seeds.sh 1 2 3 4 5 6 > seeds_s3lm.out 2>&1 &
+#  and S3LM against S3SIG, seed by seed:
+#      python seed_summary.py --seeds 1 2 3 4 5 6 --arms S3SIG S3LM
 # =============================================================================
 set -u
 SEEDS="${*:-2 3 4 5 6}"
+ARMS="${ARMS:-vanilla s3sig}"
 SETS="CVC-300 CVC-ClinicDB Kvasir CVC-ColonDB ETIS-LaribPolypDB"
+
+run_name() {   # run_1288.sh stage -> run name without the seed suffix
+  case "$1" in
+    vanilla)     echo PVT_VANILLA ;;
+    vanilla_aug) echo PVT_VANILLA_AUG ;;
+    *)           echo "${1^^}" ;;
+  esac
+}
 
 finished() {   # run name: training reached the last epoch and every test map exists
   grep -q "Epoch \[099/100\], Step \[0081/0081\]" "logs_$1.txt" 2>/dev/null || return 1
@@ -40,9 +56,8 @@ finished() {   # run name: training reached the last epoch and every test map ex
 }
 
 for seed in $SEEDS; do
-  for pair in "vanilla PVT_VANILLA" "s3sig S3SIG"; do
-    set -- $pair
-    stage=$1; run="$2_s$seed"
+  for stage in $ARMS; do
+    run="$(run_name "$stage")_s$seed"
     if finished "$run"; then
       echo "=== $run already finished, skipped"
       continue
@@ -53,4 +68,7 @@ for seed in $SEEDS; do
 done
 
 echo "=== $(date '+%F %T')  all seeds done; scoring"
-python seed_summary.py --seeds $SEEDS
+for stage in $ARMS; do
+  [ "$stage" = vanilla ] && continue
+  python seed_summary.py --seeds $SEEDS --arms PVT_VANILLA "$(run_name "$stage")"
+done

@@ -22,6 +22,10 @@
 #                on missed polyp pixels (y = 1), 1 - p_o on false positives (y = 0)
 #  s3sigy        s3sig with the target fixed: on the wrong pixels the flipped views
 #                are pulled toward the label y, not toward the wrong upright mask
+#  s3lm          lag-or-margin, per flipped view: w = 1 where the view is at least as
+#                far from the label as the upright (the pull then moves it toward the
+#                label), else max(0, 1 - 2|p_o - y|), so a view that beats a wrong
+#                upright is never pulled toward the error. No new setting.
 #  gate          inference only: gate_share.py on existing checkpoints
 #
 #  SEED=<n> sets --seed and appends _s<n> to the run name (default: unseeded).
@@ -29,7 +33,7 @@
 #  (partial or stale) checkpoint is not scored.
 #
 #  Usage: bash run_1288.sh vanilla | vanilla_aug | s3f | s3err | s3gate | s3bgate | s3rel | s3sig
-#                          | s3sigy | gate
+#                          | s3sigy | s3lm | gate
 #         SEED=1 bash run_1288.sh s3err
 #         bash run_1288.sh all            # = s3err
 # =============================================================================
@@ -79,6 +83,7 @@ s3bgate()     { train_arm S3BGATE$SFX $FCT --fct_weit 4 && infer_arm S3BGATE$SFX
 s3rel()       { train_arm S3REL$SFX $FCT --fct_weit 5 && infer_arm S3REL$SFX PolypPVT; }
 s3sig()       { train_arm S3SIG$SFX $FCT --fct_weit 6 && infer_arm S3SIG$SFX PolypPVT; }
 s3sigy()      { train_arm S3SIGY$SFX $FCT --fct_weit 7 && infer_arm S3SIGY$SFX PolypPVT; }
+s3lm()        { train_arm S3LM$SFX $FCT --fct_weit 8 && infer_arm S3LM$SFX PolypPVT; }
 gate()        { local ck=""; for a in S3F S3F_EMA S3W05 S3ERR; do [ -d "./model_pth/$a" ] && ck="$ck ./model_pth/$a"; done
                 python gate_share.py --pth_path $ck; }
 
@@ -92,6 +97,7 @@ case "$STAGE" in
   s3rel)       s3rel ;;
   s3sig)       s3sig ;;
   s3sigy)      s3sigy ;;
+  s3lm)        s3lm ;;
   gate)        gate; exit 0 ;;
   all)         s3err ;;
   *)           echo "unknown stage: $STAGE"; exit 1 ;;
