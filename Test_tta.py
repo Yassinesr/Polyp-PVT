@@ -138,6 +138,8 @@ if __name__ == '__main__':
 
         image_root = '{}/images/'.format(data_path)
         gt_root = '{}/masks/'.format(data_path)
+        if not os.path.isdir(gt_root):           # ValidationDataset keeps its masks in gt/
+            gt_root = '{}/gt/'.format(data_path)
         num1 = len(os.listdir(gt_root))
         test_loader = test_dataset(image_root, gt_root, opt.testsize)
 

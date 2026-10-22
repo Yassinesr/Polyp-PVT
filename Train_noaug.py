@@ -358,6 +358,10 @@ def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
                       DETACHED upright prediction, per --fct_loss, optionally
                       weighted by the structure_loss boundary weight
                       (--fct_weit 1). lam is split evenly over the flipped views.
+      * --fct_up 1    the upright view also learns from the flips: where the
+                      flipped view closest to the label beats the upright view,
+                      the upright logits are pulled toward that flip's detached
+                      probability, with the weight of one flip's term.
 
     The upright graph is freed before any flipped forward, so one graph is alive
     at a time, as in the v1 seq mode. Returns the supervised loss averaged over
@@ -380,8 +384,41 @@ def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
         weit, eps = _error_weight(p_o, gts[:n].float()), 1e-6
     else:
         weit = None
-    _bw(sup_w * loss)                          # frees the upright graph NOW
-    sup_sum = float(loss.detach())
+    up_loss = None
+    if opt.fct_up and lam > 0 and flips:
+        # The upright view learns from the flips. Where the flipped view closest to the
+        # label is closer than the upright view, the upright logits are pulled toward that
+        # flip's detached probability, so this pull, too, only ever moves toward the label.
+        # The flips' probabilities come from a forward pass without gradients, with the
+        # same depth mask as the passes below; batch-norm running statistics are frozen
+        # during it, so the extra pass leaves no trace in the model.
+        bns = [m for m in model.modules() if isinstance(m, torch.nn.modules.batchnorm._BatchNorm)]
+        moms = [m.momentum for m in bns]
+        for m in bns:
+            m.momentum = 0.0
+        e_o = (p_o - yb).abs()
+        best_e, best_p = e_o, p_o
+        with torch.no_grad():
+            for f in flips:
+                if rng0 is not None:
+                    _rng_restore(rng0)
+                with autocast(enabled=bool(opt.amp)):
+                    a, b = model(f(images[:n]))
+                p_k = torch.sigmoid((f(a) + f(b)).float())
+                e_k = (p_k - yb).abs()
+                best_p = torch.where(e_k < best_e, p_k, best_p)
+                best_e = torch.minimum(e_k, best_e)
+        for m, mom in zip(bns, moms):
+            m.momentum = mom
+        gate_up = (best_e < e_o).float()
+        per_up = F.binary_cross_entropy_with_logits((P1 + P2)[:n].float(), best_p, reduction='none')
+        up_loss = _wsum_reduce(per_up, gate_up, hw)
+        frac = float(gate_up.mean())           # share of upright pixels a flip beats
+        state['up_frac'] = frac if state.get('up_frac') is None else 0.98 * state['up_frac'] + 0.02 * frac
+    # With --fct_up the upright term rides on this backward, so --grad_diag counts it
+    # as supervised gradient.
+    _bw(sup_w * loss if up_loss is None else sup_w * loss + (lam / len(flips)) * up_loss)
+    sup_sum = float(loss.detach())             # the upright graph is freed now
 
     diag = (opt.grad_diag > 0 and unit_rate and lam > 0
             and state['iter'] % opt.grad_diag == 0)
@@ -576,6 +613,8 @@ def train(train_loader, model, optimizer, epoch, opt, state):
                     msg += ', {}: {:0.5f}'.format(lbl, cons_record.show())
                 if state.get('diag') is not None:
                     msg += ', |g_cons|/|g_sup|: {:0.3f}, cos: {:+0.3f}'.format(*state['diag'])
+                if state.get('up_frac') is not None:
+                    msg += ', up: {:0.4f}'.format(state['up_frac'])
             print(msg)
 
     os.makedirs(opt.train_save, exist_ok=True)
@@ -688,6 +727,12 @@ if __name__ == '__main__':
                              'is at least as far from y as the upright, else max(0, 1 - 2|p_o - y|) '
                              '(0 wherever the upright is wrong), divided by H*W. All use the GT: '
                              'pair with --fct_sup 1')
+    parser.add_argument('--fct_up', type=int, default=0, choices=[0, 1],
+                        help='1 = the upright view also learns from the flips: where the '
+                             'flipped view closest to y is closer than the upright view, the '
+                             'upright logits are pulled toward that flip\'s detached probability '
+                             '(always toward y), weighted like one flip\'s term (lam / n_flips). '
+                             'Costs one forward pass without gradients per flip. FCT v2 only')
     parser.add_argument('--seed', type=int, default=-1,
                         help='seed python/numpy/torch RNGs (-1 = unseeded, as before). '
                              'cuDNN kernels can still make runs differ slightly')
@@ -744,6 +789,8 @@ if __name__ == '__main__':
     if _fct_v2(opt) and opt.fct_mode != 'seq':
         parser.error('--fct_sup/--fct_loss bce/--fct_weit/--fct_all_scales/--grad_diag '
                      'are implemented for --fct_mode seq only')
+    if opt.fct_up and not _fct_v2(opt):
+        parser.error('--fct_up needs the FCT v2 path (for example --fct 1 --fct_sup 1)')
     if opt.fct_weit and not opt.fct_sup:
         print('!! --fct_weit without --fct_sup 1: the weight is built from the GT, so '
               'labels reach the otherwise unsupervised flipped views.')
@@ -849,6 +896,9 @@ if __name__ == '__main__':
                   opt.fct_sub or 'full batch', opt.grad_diag or 'off'))
         if opt.fct_weight <= 0:
             print('  (consistency OFF: this is the supervised-flips control)')
+        if opt.fct_up:
+            print('  upright view also pulled toward the flip closest to the label where that '
+                  'flip beats it (--fct_up 1)')
     elif opt.fct:
         print('  FCT consistency-only: weight {:.3f}, vflip {}, warmup {}, sub {}'.format(
             opt.fct_weight, bool(opt.fct_vflip), opt.fct_warmup_iters,

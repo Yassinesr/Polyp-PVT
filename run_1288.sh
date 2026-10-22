@@ -26,6 +26,9 @@
 #                far from the label as the upright (the pull then moves it toward the
 #                label), else max(0, 1 - 2|p_o - y|), so a view that beats a wrong
 #                upright is never pulled toward the error. No new setting.
+#  s3lmup        s3lm, and the upright view also learns from the flips: where the flip
+#                closest to the label beats the upright view, the upright is pulled toward
+#                that flip (--fct_up 1). No new setting; about 30% slower per step.
 #  gate          inference only: gate_share.py on existing checkpoints
 #
 #  SEED=<n> sets --seed and appends _s<n> to the run name (default: unseeded).
@@ -33,7 +36,7 @@
 #  (partial or stale) checkpoint is not scored.
 #
 #  Usage: bash run_1288.sh vanilla | vanilla_aug | s3f | s3err | s3gate | s3bgate | s3rel | s3sig
-#                          | s3sigy | s3lm | gate
+#                          | s3sigy | s3lm | s3lmup | gate
 #         SEED=1 bash run_1288.sh s3err
 #         bash run_1288.sh all            # = s3err
 # =============================================================================
@@ -84,6 +87,7 @@ s3rel()       { train_arm S3REL$SFX $FCT --fct_weit 5 && infer_arm S3REL$SFX Pol
 s3sig()       { train_arm S3SIG$SFX $FCT --fct_weit 6 && infer_arm S3SIG$SFX PolypPVT; }
 s3sigy()      { train_arm S3SIGY$SFX $FCT --fct_weit 7 && infer_arm S3SIGY$SFX PolypPVT; }
 s3lm()        { train_arm S3LM$SFX $FCT --fct_weit 8 && infer_arm S3LM$SFX PolypPVT; }
+s3lmup()      { train_arm S3LMUP$SFX $FCT --fct_weit 8 --fct_up 1 && infer_arm S3LMUP$SFX PolypPVT; }
 gate()        { local ck=""; for a in S3F S3F_EMA S3W05 S3ERR; do [ -d "./model_pth/$a" ] && ck="$ck ./model_pth/$a"; done
                 python gate_share.py --pth_path $ck; }
 
@@ -98,6 +102,7 @@ case "$STAGE" in
   s3sig)       s3sig ;;
   s3sigy)      s3sigy ;;
   s3lm)        s3lm ;;
+  s3lmup)      s3lmup ;;
   gate)        gate; exit 0 ;;
   all)         s3err ;;
   *)           echo "unknown stage: $STAGE"; exit 1 ;;
