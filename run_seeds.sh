@@ -31,6 +31,11 @@
 #      ARMS="vanilla s3lm" nohup bash run_seeds.sh 1 2 3 4 5 6 > seeds_s3lm.out 2>&1 &
 #  and S3LM against S3SIG, seed by seed:
 #      python seed_summary.py --seeds 1 2 3 4 5 6 --arms S3SIG S3LM
+#
+#  The sweep of lag-or-margin's factor a (S3LMUP itself is a = 2) on the same seeds, about
+#  5.5 h per run, then the comparison across a:
+#      ARMS="s3lmup_a05 s3lmup_a10 s3lmup_a15" nohup bash run_seeds.sh 1 2 3 4 5 6 > seeds_sweep.out 2>&1 &
+#      python sweep_summary.py
 # =============================================================================
 set -u
 SEEDS="${*:-2 3 4 5 6}"

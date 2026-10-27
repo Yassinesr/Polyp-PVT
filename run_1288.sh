@@ -29,6 +29,10 @@
 #  s3lmup        s3lm, and the upright view also learns from the flips: where the flip
 #                closest to the label beats the upright view, the upright is pulled toward
 #                that flip (--fct_up 1). No new setting; about 30% slower per step.
+#  s3lmup_a05    the sweep of lag-or-margin's factor: s3lmup with w = max(0, 1 - a|p_o - y|)
+#  s3lmup_a10    on the views that beat the upright, a = 0.5, 1, 1.5 and 3 (--fct_lm_a).
+#  s3lmup_a15    s3lmup itself is a = 2, the only value that gives every wrong upright
+#  s3lmup_a30    weight 0 and every right one weight > 0. Compare with sweep_summary.py.
 #  gate          inference only: gate_share.py on existing checkpoints
 #
 #  SEED=<n> sets --seed and appends _s<n> to the run name (default: unseeded).
@@ -36,7 +40,8 @@
 #  (partial or stale) checkpoint is not scored.
 #
 #  Usage: bash run_1288.sh vanilla | vanilla_aug | s3f | s3err | s3gate | s3bgate | s3rel | s3sig
-#                          | s3sigy | s3lm | s3lmup | gate
+#                          | s3sigy | s3lm | s3lmup | s3lmup_a05 | s3lmup_a10 | s3lmup_a15
+#                          | s3lmup_a30 | gate
 #         SEED=1 bash run_1288.sh s3err
 #         bash run_1288.sh all            # = s3err
 # =============================================================================
@@ -88,6 +93,10 @@ s3sig()       { train_arm S3SIG$SFX $FCT --fct_weit 6 && infer_arm S3SIG$SFX Pol
 s3sigy()      { train_arm S3SIGY$SFX $FCT --fct_weit 7 && infer_arm S3SIGY$SFX PolypPVT; }
 s3lm()        { train_arm S3LM$SFX $FCT --fct_weit 8 && infer_arm S3LM$SFX PolypPVT; }
 s3lmup()      { train_arm S3LMUP$SFX $FCT --fct_weit 8 --fct_up 1 && infer_arm S3LMUP$SFX PolypPVT; }
+s3lmup_a05()  { train_arm S3LMUP_A05$SFX $FCT --fct_weit 8 --fct_up 1 --fct_lm_a 0.5 && infer_arm S3LMUP_A05$SFX PolypPVT; }
+s3lmup_a10()  { train_arm S3LMUP_A10$SFX $FCT --fct_weit 8 --fct_up 1 --fct_lm_a 1.0 && infer_arm S3LMUP_A10$SFX PolypPVT; }
+s3lmup_a15()  { train_arm S3LMUP_A15$SFX $FCT --fct_weit 8 --fct_up 1 --fct_lm_a 1.5 && infer_arm S3LMUP_A15$SFX PolypPVT; }
+s3lmup_a30()  { train_arm S3LMUP_A30$SFX $FCT --fct_weit 8 --fct_up 1 --fct_lm_a 3.0 && infer_arm S3LMUP_A30$SFX PolypPVT; }
 gate()        { local ck=""; for a in S3F S3F_EMA S3W05 S3ERR; do [ -d "./model_pth/$a" ] && ck="$ck ./model_pth/$a"; done
                 python gate_share.py --pth_path $ck; }
 
@@ -103,6 +112,10 @@ case "$STAGE" in
   s3sigy)      s3sigy ;;
   s3lm)        s3lm ;;
   s3lmup)      s3lmup ;;
+  s3lmup_a05)  s3lmup_a05 ;;
+  s3lmup_a10)  s3lmup_a10 ;;
+  s3lmup_a15)  s3lmup_a15 ;;
+  s3lmup_a30)  s3lmup_a30 ;;
   gate)        gate; exit 0 ;;
   all)         s3err ;;
   *)           echo "unknown stage: $STAGE"; exit 1 ;;

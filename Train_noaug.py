@@ -426,6 +426,7 @@ def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
         flips = []                             # nothing to train on the flips (warmup step 0)
     g_cons = None
     cons_sum, cons_n = 0.0, 0
+    lead_sum = wl_sum = 0.0
     for f in flips:
         if rng0 is not None:
             _rng_restore(rng0)                 # same depth mask as the upright view
@@ -452,12 +453,17 @@ def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
                     # The pull on this view toward the label is w * (e_f - e_o), e = |p - y|.
                     # Where the view lags the upright (e_f >= e_o) the pull helps: w = 1, as in
                     # mode 0. Where it leads, the pull moves it away from the label, so it is
-                    # kept only as much as the upright is confidently right, 1 - 2 e_o, and is 0
-                    # wherever the upright is wrong. No setting to tune; w is never above 1.
+                    # kept only as much as the upright is confidently right, 1 - a e_o. The
+                    # default a = 2 (--fct_lm_a) makes that the upright's margin, 0 exactly where
+                    # the upright turns wrong; other values are for the sweep. w is never above 1.
                     p_f = torch.sigmoid((p1f + p2f).detach().float())
                     e_o, e_f = (p_o - yb).abs(), (p_f - yb).abs()
-                    w_v = torch.where(e_f >= e_o, torch.ones_like(e_o), (1.0 - 2.0 * e_o).clamp(min=0.0))
+                    w_v = torch.where(e_f >= e_o, torch.ones_like(e_o),
+                                      (1.0 - opt.fct_lm_a * e_o).clamp(min=0.0))
                     den = hw
+                    lead = (e_f < e_o).float()     # this view beats the upright
+                    lead_sum = lead_sum + lead.mean()
+                    wl_sum = wl_sum + (lead * (1.0 - gate_o)).mean()   # ... and the upright is wrong
                 else:                          # relative gate: upright closer to y than this view
                     p_f = torch.sigmoid((p1f + p2f).detach().float())
                     w_v = ((p_o - yb).abs() < (p_f - yb).abs()).float()
@@ -491,6 +497,11 @@ def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
 
     if cons_n:
         cons_record.update(torch.tensor(cons_sum / cons_n), opt.batchsize)
+    if cons_n and opt.fct_weit == 8:
+        # Shares of pixels where a flipped view beats the upright (lead: the pixels --fct_lm_a
+        # acts on) and where it beats a wrong upright (wl: where a < 2 pulls toward the error).
+        for key, v in (('lead_frac', float(lead_sum) / cons_n), ('wl_frac', float(wl_sum) / cons_n)):
+            state[key] = v if state.get(key) is None else 0.98 * state[key] + 0.02 * v
     if g_cons is not None:
         g_sup = _flat_grad(model) - g_cons
         ratio = g_cons.norm() / (g_sup.norm() + 1e-12)
@@ -615,6 +626,8 @@ def train(train_loader, model, optimizer, epoch, opt, state):
                     msg += ', |g_cons|/|g_sup|: {:0.3f}, cos: {:+0.3f}'.format(*state['diag'])
                 if state.get('up_frac') is not None:
                     msg += ', up: {:0.4f}'.format(state['up_frac'])
+                if state.get('lead_frac') is not None:
+                    msg += ', lead: {:0.4f}, wl: {:0.4f}'.format(state['lead_frac'], state['wl_frac'])
             print(msg)
 
     os.makedirs(opt.train_save, exist_ok=True)
@@ -724,15 +737,21 @@ if __name__ == '__main__':
                              '(false positive), divided by H*W. 7 = the weights of 6, but on the '
                              'wrong pixels the target is the label y instead of the wrong upright '
                              'prediction. 8 = lag-or-margin, per flipped view: 1 where the view '
-                             'is at least as far from y as the upright, else max(0, 1 - 2|p_o - y|) '
-                             '(0 wherever the upright is wrong), divided by H*W. All use the GT: '
-                             'pair with --fct_sup 1')
+                             'is at least as far from y as the upright, else max(0, 1 - a|p_o - y|) '
+                             'with a = --fct_lm_a (default 2: 0 wherever the upright is wrong), '
+                             'divided by H*W. All use the GT: pair with --fct_sup 1')
     parser.add_argument('--fct_up', type=int, default=0, choices=[0, 1],
                         help='1 = the upright view also learns from the flips: where the '
                              'flipped view closest to y is closer than the upright view, the '
                              'upright logits are pulled toward that flip\'s detached probability '
                              '(always toward y), weighted like one flip\'s term (lam / n_flips). '
                              'Costs one forward pass without gradients per flip. FCT v2 only')
+    parser.add_argument('--fct_lm_a', type=float, default=2.0,
+                        help='lag-or-margin factor a (--fct_weit 8): where a flipped view beats '
+                             'the upright, w = max(0, 1 - a|p_o - y|). 2 (default) is the only '
+                             'value that gives every wrong upright w = 0 and every right one '
+                             'w > 0; below 2 some pull toward a wrong upright remains, above 2 a '
+                             'right upright can lose its pull. Other values are for the sweep')
     parser.add_argument('--seed', type=int, default=-1,
                         help='seed python/numpy/torch RNGs (-1 = unseeded, as before). '
                              'cuDNN kernels can still make runs differ slightly')
@@ -791,6 +810,10 @@ if __name__ == '__main__':
                      'are implemented for --fct_mode seq only')
     if opt.fct_up and not _fct_v2(opt):
         parser.error('--fct_up needs the FCT v2 path (for example --fct 1 --fct_sup 1)')
+    if opt.fct_lm_a != 2.0 and opt.fct_weit != 8:
+        parser.error('--fct_lm_a only applies to the lag-or-margin weight (--fct_weit 8)')
+    if opt.fct_lm_a < 0:
+        parser.error('--fct_lm_a must be >= 0')
     if opt.fct_weit and not opt.fct_sup:
         print('!! --fct_weit without --fct_sup 1: the weight is built from the GT, so '
               'labels reach the otherwise unsupervised flipped views.')
@@ -891,7 +914,7 @@ if __name__ == '__main__':
                    4: ' (boundary-weighted, error-gated)', 5: ' (relative-gated)',
                    6: ' (wrong pixels weighted 1 +/- p_o)',
                    7: ' (wrong pixels weighted 1 +/- p_o, label target)',
-                   8: ' (lag-or-margin)'}[opt.fct_weit],
+                   8: ' (lag-or-margin, a = {:g})'.format(opt.fct_lm_a)}[opt.fct_weit],
                   bool(opt.fct_vflip), opt.fct_warmup_iters, bool(opt.fct_all_scales),
                   opt.fct_sub or 'full batch', opt.grad_diag or 'off'))
         if opt.fct_weight <= 0:
