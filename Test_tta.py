@@ -24,6 +24,9 @@ Usage:
 into. Given a directory it prefers PolypPVT.pth (best), then last.pth, then the
 highest-numbered per-epoch file. --views 1 is plain inference and --views 4 is
 flip TTA, so both passes of the ablation come from one code path.
+
+For a checkpoint of another model trained with Train_noaug.py --host, pass the
+same --host and --host_root; the prediction is then that paper's (see hosts.py).
 """
 import os
 import re
@@ -35,7 +38,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from lib.pvt import PolypPVT
+from hosts import HOSTS, get_host
 from utils.dataloader import test_dataset
 
 TESTSETS = ['CVC-300', 'CVC-ClinicDB', 'Kvasir', 'CVC-ColonDB', 'ETIS-LaribPolypDB']
@@ -85,15 +88,16 @@ def resolve_checkpoint(path):
 
 
 @torch.no_grad()
-def tta_probability(model, image, out_shape):
+def tta_probability(model, image, out_shape, host=None):
     """Mean of sigmoid(P1+P2) over the four flips, each flipped back first."""
+    host = host or get_host('polyppvt')
     acc = None
     # (dims to flip the input, dims to flip the output back) -- same dims, since
     # every one of these transforms is its own inverse.
     for dims in ([], [3], [2], [2, 3]):
         x = torch.flip(image, dims=dims) if dims else image
-        p1, p2 = model(x)
-        res = F.upsample(p1 + p2, size=out_shape, mode='bilinear', align_corners=False)
+        z = host.logit(host.heads(model(x)))
+        res = F.upsample(z, size=out_shape, mode='bilinear', align_corners=False)
         res = res.sigmoid()
         if dims:
             res = torch.flip(res, dims=dims)
@@ -109,6 +113,10 @@ if __name__ == '__main__':
     parser.add_argument('--save_root', type=str, default='./result_map/PolypPVT_TTA')
     parser.add_argument('--sets', type=str, nargs='+', default=TESTSETS,
                         help='test-set folders under --data_root, each with images/ and masks/')
+    parser.add_argument('--host', type=str, default='polyppvt', choices=sorted(HOSTS),
+                        help='the model the checkpoint belongs to (see hosts.py)')
+    parser.add_argument('--host_root', type=str, default=None,
+                        help='your clone of the host\'s code, as for Train_noaug.py')
     parser.add_argument('--views', type=int, default=4, choices=[1, 4],
                         help='4 = flip TTA, 1 = plain inference (for an A/B on one script)')
     parser.add_argument('--single_view', type=str, default='none',
@@ -121,7 +129,8 @@ if __name__ == '__main__':
     opt = parser.parse_args()
 
     pth = resolve_checkpoint(opt.pth_path)
-    model = PolypPVT()
+    host = get_host(opt.host, opt.host_root)
+    model = host.build()
     model.load_state_dict(torch.load(pth))
     model.cuda()
     model.eval()
@@ -150,13 +159,13 @@ if __name__ == '__main__':
             image = image.cuda()
 
             if opt.views == 4 and opt.single_view == 'none':
-                res = tta_probability(model, image, gt.shape)
+                res = tta_probability(model, image, gt.shape, host)
             else:
                 dims = {'none': [], 'h': [3], 'v': [2], 'hv': [2, 3]}[opt.single_view]
                 with torch.no_grad():
                     x = torch.flip(image, dims=dims) if dims else image
-                    p1, p2 = model(x)
-                    r = F.upsample(p1 + p2, size=gt.shape, mode='bilinear',
+                    z = host.logit(host.heads(model(x)))
+                    r = F.upsample(z, size=gt.shape, mode='bilinear',
                                    align_corners=False).sigmoid()
                     if dims:
                         r = torch.flip(r, dims=dims)

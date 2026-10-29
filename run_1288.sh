@@ -33,6 +33,15 @@
 #  s3lmup_a10    on the views that beat the upright, a = 0.5, 1, 1.5 and 3 (--fct_lm_a).
 #  s3lmup_a15    s3lmup itself is a = 2, the only value that gives every wrong upright
 #  s3lmup_a30    weight 0 and every right one weight > 0. Compare with sweep_summary.py.
+#  cascade_vanilla   PVT-CASCADE (WACV 2023), loaded from your clone (CASCADE_ROOT, default
+#                    ../CASCADE), with its own loss and recipe, which is Polyp-PVT's:
+#                    AdamW 1e-4, batch 16, 100 epochs
+#  cascade_s3lmup    the same with FCT exactly as in s3lmup
+#  pranetv2_vanilla  PraNet-V2 on Res2Net-50, from PRANETV2_ROOT (default
+#                    ../PraNet-V2/binary_seg), with its own loss and recipe: Adam 1e-4,
+#                    batch 8, --epoch 30 (the loop runs 29 epochs, as in its MyTrain_med.py)
+#  pranetv2_s3lmup   the same with FCT exactly as in s3lmup
+#                    Run setup_hosts.sh once before the host stages.
 #  gate          inference only: gate_share.py on existing checkpoints
 #
 #  SEED=<n> sets --seed and appends _s<n> to the run name (default: unseeded).
@@ -41,7 +50,8 @@
 #
 #  Usage: bash run_1288.sh vanilla | vanilla_aug | s3f | s3err | s3gate | s3bgate | s3rel | s3sig
 #                          | s3sigy | s3lm | s3lmup | s3lmup_a05 | s3lmup_a10 | s3lmup_a15
-#                          | s3lmup_a30 | gate
+#                          | s3lmup_a30 | cascade_vanilla | cascade_s3lmup | pranetv2_vanilla
+#                          | pranetv2_s3lmup | gate
 #         SEED=1 bash run_1288.sh s3err
 #         bash run_1288.sh all            # = s3err
 # =============================================================================
@@ -51,6 +61,7 @@ SEED="${SEED:-}"
 SFX=""; SEEDFLAG=""
 if [ -n "$SEED" ]; then SFX="_s$SEED"; SEEDFLAG="--seed $SEED"; fi
 COMMON="--multiscale 1 --drop_path 0.1 --amp 1 --train_path ./dataset/TrainDataset/ $SEEDFLAG"
+HOSTARGS=""        # --host and --host_root of the model; set by the host stages below
 
 if [ -d ./dataset/TestDataset/test ]; then
   echo "!! ./dataset/TestDataset/test exists: Train_noaug.py would pick the best epoch on it"
@@ -75,8 +86,8 @@ infer_arm() {   # name, checkpoint files...
     [ -f "./model_pth/$arm/$ck.pth" ] || continue
     local tag="$arm"
     echo "=== infer $arm/$ck -> result_map/$tag"
-    python Test_tta.py --pth_path "./model_pth/$arm/$ck.pth" --views 1 --save_root "./result_map/$tag"
-    python flip_gap.py --pth_path "./model_pth/$arm/$ck.pth" --out flip_gap.tsv
+    python Test_tta.py --pth_path "./model_pth/$arm/$ck.pth" --views 1 --save_root "./result_map/$tag" $HOSTARGS
+    python flip_gap.py --pth_path "./model_pth/$arm/$ck.pth" --out flip_gap.tsv $HOSTARGS
   done
 }
 
@@ -97,6 +108,17 @@ s3lmup_a05()  { train_arm S3LMUP_A05$SFX $FCT --fct_weit 8 --fct_up 1 --fct_lm_a
 s3lmup_a10()  { train_arm S3LMUP_A10$SFX $FCT --fct_weit 8 --fct_up 1 --fct_lm_a 1.0 && infer_arm S3LMUP_A10$SFX PolypPVT; }
 s3lmup_a15()  { train_arm S3LMUP_A15$SFX $FCT --fct_weit 8 --fct_up 1 --fct_lm_a 1.5 && infer_arm S3LMUP_A15$SFX PolypPVT; }
 s3lmup_a30()  { train_arm S3LMUP_A30$SFX $FCT --fct_weit 8 --fct_up 1 --fct_lm_a 3.0 && infer_arm S3LMUP_A30$SFX PolypPVT; }
+CASCADE="--host cascade --host_root ${CASCADE_ROOT:-../CASCADE}"
+PRANETV2="--host pranetv2 --host_root ${PRANETV2_ROOT:-../PraNet-V2/binary_seg}"
+PRANETV2_RECIPE="--optimizer Adam --batchsize 8 --epoch 30"
+cascade_vanilla()  { HOSTARGS="$CASCADE"; train_arm CASCADE_VANILLA$SFX $HOSTARGS --orientation_aug 0 \
+                       && infer_arm CASCADE_VANILLA$SFX PolypPVT; }
+cascade_s3lmup()   { HOSTARGS="$CASCADE"; train_arm CASCADE_S3LMUP$SFX $HOSTARGS $FCT --fct_weit 8 --fct_up 1 \
+                       && infer_arm CASCADE_S3LMUP$SFX PolypPVT; }
+pranetv2_vanilla() { HOSTARGS="$PRANETV2"; train_arm PRANETV2_VANILLA$SFX $HOSTARGS $PRANETV2_RECIPE --orientation_aug 0 \
+                       && infer_arm PRANETV2_VANILLA$SFX PolypPVT; }
+pranetv2_s3lmup()  { HOSTARGS="$PRANETV2"; train_arm PRANETV2_S3LMUP$SFX $HOSTARGS $PRANETV2_RECIPE $FCT --fct_weit 8 --fct_up 1 \
+                       && infer_arm PRANETV2_S3LMUP$SFX PolypPVT; }
 gate()        { local ck=""; for a in S3F S3F_EMA S3W05 S3ERR; do [ -d "./model_pth/$a" ] && ck="$ck ./model_pth/$a"; done
                 python gate_share.py --pth_path $ck; }
 
@@ -116,6 +138,10 @@ case "$STAGE" in
   s3lmup_a10)  s3lmup_a10 ;;
   s3lmup_a15)  s3lmup_a15 ;;
   s3lmup_a30)  s3lmup_a30 ;;
+  cascade_vanilla)  cascade_vanilla ;;
+  cascade_s3lmup)   cascade_s3lmup ;;
+  pranetv2_vanilla) pranetv2_vanilla ;;
+  pranetv2_s3lmup)  pranetv2_s3lmup ;;
   gate)        gate; exit 0 ;;
   all)         s3err ;;
   *)           echo "unknown stage: $STAGE"; exit 1 ;;

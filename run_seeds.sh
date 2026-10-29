@@ -36,6 +36,10 @@
 #  5.5 h per run, then the comparison across a:
 #      ARMS="s3lmup_a05 s3lmup_a10 s3lmup_a15" nohup bash run_seeds.sh 1 2 3 4 5 6 > seeds_sweep.out 2>&1 &
 #      python sweep_summary.py
+#
+#  FCT on the two other models (bash setup_hosts.sh once first), each scored against
+#  its own vanilla on the same seeds, about 85 GPU-hours for six seeds:
+#      ARMS="cascade_vanilla cascade_s3lmup pranetv2_vanilla pranetv2_s3lmup" nohup bash run_seeds.sh 1 2 3 4 5 6 > seeds_hosts.out 2>&1 &
 # =============================================================================
 set -u
 SEEDS="${*:-2 3 4 5 6}"
@@ -50,8 +54,17 @@ run_name() {   # run_1288.sh stage -> run name without the seed suffix
   esac
 }
 
+vanilla_of() {   # run_1288.sh stage -> the vanilla run it is scored against
+  case "$1" in
+    cascade_*)  echo CASCADE_VANILLA ;;
+    pranetv2_*) echo PRANETV2_VANILLA ;;
+    *)          echo PVT_VANILLA ;;
+  esac
+}
+
 finished() {   # run name: training reached the last epoch and every test map exists
-  grep -q "Epoch \[099/100\], Step \[0081/0081\]" "logs_$1.txt" 2>/dev/null || return 1
+  grep -q -e "Epoch \[099/100\], Step \[0081/0081\]" -e "^=== training finished" \
+    "logs_$1.txt" 2>/dev/null || return 1
   local s n m
   for s in $SETS; do
     n=$(ls "./dataset/TestDataset/$s/masks/" 2>/dev/null | wc -l)
@@ -74,6 +87,6 @@ done
 
 echo "=== $(date '+%F %T')  all seeds done; scoring"
 for stage in $ARMS; do
-  [ "$stage" = vanilla ] && continue
-  python seed_summary.py --seeds $SEEDS --arms PVT_VANILLA "$(run_name "$stage")"
+  case "$stage" in vanilla|*_vanilla) continue ;; esac
+  python seed_summary.py --seeds $SEEDS --arms "$(vanilla_of "$stage")" "$(run_name "$stage")"
 done

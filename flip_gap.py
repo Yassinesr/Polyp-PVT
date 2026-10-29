@@ -23,25 +23,28 @@ Usage:
 
 Images are only resized and normalised (utils/dataloader.test_dataset), so no
 augmentation is applied on either the train or the test images.
+
+For checkpoints of another model trained with Train_noaug.py --host, pass the same
+--host and --host_root (see hosts.py).
 """
 import os
 import argparse
 
 import torch
 
-from lib.pvt import PolypPVT
+from hosts import HOSTS, get_host
 from utils.dataloader import test_dataset
 from Test_tta import resolve_checkpoint
 
 TESTSETS = ['CVC-300', 'CVC-ClinicDB', 'Kvasir', 'CVC-ColonDB', 'ETIS-LaribPolypDB']
 FLIPS = {'h': [3], 'v': [2]}          # NCHW: dim 3 = width (horizontal), dim 2 = height
+HOST = get_host('polyppvt')           # set from --host below
 
 
 def _mask(model, x, dims=None):
     if dims is not None:
         x = torch.flip(x, dims)
-    p1, p2 = model(x)
-    p = torch.sigmoid(p1 + p2)
+    p = torch.sigmoid(HOST.logit(HOST.heads(model(x))))
     if dims is not None:
         p = torch.flip(p, dims)
     return p > 0.5
@@ -86,12 +89,17 @@ if __name__ == '__main__':
     parser.add_argument('--testsize', type=int, default=352)
     parser.add_argument('--out', type=str, default='',
                         help='optional TSV file; rows are appended')
+    parser.add_argument('--host', type=str, default='polyppvt', choices=sorted(HOSTS),
+                        help='the model the checkpoints belong to (see hosts.py)')
+    parser.add_argument('--host_root', type=str, default=None,
+                        help='your clone of the host\'s code, as for Train_noaug.py')
     opt = parser.parse_args()
+    HOST = get_host(opt.host, opt.host_root)
 
     rows = []
     for p in opt.pth_path:
         ck = resolve_checkpoint(p)
-        model = PolypPVT()
+        model = HOST.build()
         model.load_state_dict(torch.load(ck, map_location='cpu'))
         model.cuda().eval()
         name = os.path.basename(os.path.normpath(p))

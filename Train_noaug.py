@@ -118,6 +118,12 @@ FCT v2 (seq mode only; every default keeps the v1 behaviour above)
   --fct_all_scales 1  flipped views at every multi-scale rate, not only rate 1
   --grad_diag N       every N batches log |g_cons|/|g_sup| and their cosine
 See run_fct_v2.sh for the arms, and flip_gap.py for the equivariance check.
+
+OTHER MODELS (--host)
+---------------------
+  --host cascade|pranetv2 --host_root <clone> trains PVT-CASCADE or PraNet-V2 in
+  place of Polyp-PVT, with that paper's own loss; everything FCT does is unchanged.
+  See hosts.py, setup_hosts.sh and the cascade_* / pranetv2_* stages of run_1288.sh.
 """
 import os
 import copy
@@ -131,35 +137,12 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from torch.cuda.amp import autocast, GradScaler
 
-from lib.pvt import PolypPVT
+from hosts import HOSTS, get_host, structure_loss, _boundary_weight
 from utils.dataloader import get_loader, test_dataset
 from utils.utils import clip_gradient, adjust_lr, AvgMeter
 
 TESTSETS = ['CVC-300', 'CVC-ClinicDB', 'Kvasir', 'CVC-ColonDB', 'ETIS-LaribPolypDB']
-
-
-def _boundary_weight(mask):
-    """The stock structure_loss weight: 1 in flat regions, up to 6 near a boundary."""
-    return 1 + 5 * torch.abs(F.avg_pool2d(mask, kernel_size=31, stride=1, padding=15) - mask)
-
-
-def structure_loss(pred, mask):
-    """Unchanged from the stock repo.
-
-    Note the stock `reduce='none'`: `reduce` is the old boolean argument and the
-    string counts as true, so the BCE term comes back as a scalar mean and
-    `weit` has NO effect on it (it still weights the IoU term). Every arm, and
-    the released checkpoint, share this, so it is deliberately left as is.
-    """
-    weit = _boundary_weight(mask)
-    wbce = F.binary_cross_entropy_with_logits(pred, mask, reduce='none')
-    wbce = (weit * wbce).sum(dim=(2, 3)) / weit.sum(dim=(2, 3))
-
-    pred = torch.sigmoid(pred)
-    inter = ((pred * mask) * weit).sum(dim=(2, 3))
-    union = ((pred + mask) * weit).sum(dim=(2, 3))
-    wiou = 1 - (inter + 1) / (union - inter + 1)
-    return (wbce + wiou).mean()
+HOST = get_host('polyppvt')         # the model being trained; set from --host below
 
 
 # ---------------------------------------------------------------- FCT pieces
@@ -185,14 +168,13 @@ def _rng_restore(st):
 
 
 def _prob(model, x):
-    """Inference-equivalent probability map: sigmoid(P1 + P2).
+    """Inference-equivalent probability map: sigmoid of the host's prediction, P1 + P2.
 
     Test.py predicts with `P1 + P2`, so the consistency term is applied to the
     same quantity TTA will later average. Constraining anything else would be
     constraining a signal that never reaches the output.
     """
-    p1, p2 = model(x)
-    return torch.sigmoid(p1 + p2)
+    return torch.sigmoid(HOST.logit(HOST.heads(model(x))))
 
 
 def flip_consistency(model, images, p_o, use_vflip=True, rng0=None):
@@ -221,7 +203,7 @@ def flip_consistency(model, images, p_o, use_vflip=True, rng0=None):
 def _per_pixel_consistency(z_f, z_o, p_o, loss, gate=None, y=None):
     """Per-pixel disagreement between a flipped-back view and the upright target.
 
-    z_f  logits P1+P2 of the flipped view, already flipped back (has grad)
+    z_f  prediction logits (P1+P2) of the flipped view, already flipped back (has grad)
     z_o  detached logits of the upright view
     p_o  detached sigmoid(z_o)
     gate, y  optional (--fct_weit 7): where gate = 0 the upright mask is wrong,
@@ -296,7 +278,7 @@ def _ema_update(ema, model, decay, step):
 
 # ---------------------------------------------------------------- evaluation
 def test(model, path, dataset):
-    """Unchanged from the stock repo."""
+    """The stock evaluation; the prediction is the host's (P1 + P2 for Polyp-PVT)."""
     data_path = os.path.join(path, dataset)
     image_root = '{}/images/'.format(data_path)
     gt_root = '{}/masks/'.format(data_path)
@@ -310,8 +292,8 @@ def test(model, path, dataset):
         gt /= (gt.max() + 1e-8)
         image = image.cuda()
 
-        res, res1 = model(image)
-        res = F.upsample(res + res1, size=gt.shape, mode='bilinear', align_corners=False)
+        res = HOST.logit(HOST.heads(model(image)))
+        res = F.upsample(res, size=gt.shape, mode='bilinear', align_corners=False)
         res = res.sigmoid().data.cpu().numpy().squeeze()
         res = (res - res.min()) / (res.max() - res.min() + 1e-8)
         target = np.array(gt)
@@ -344,13 +326,16 @@ def evaluate_all(model, test_root):
 
 
 # ---------------------------------------------------------------- train loop
-def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
+def _fct_v2_step(model, images, gts, heads, loss, lam, rng0, opt, state,
                  cons_record, _bw, unit_rate):
     """One FCT step with the v2 options (seq mode only).
 
+    `heads` are the upright view's output maps (P1, P2 for Polyp-PVT) and `loss`
+    their supervised loss; the prediction is HOST.logit(heads).
+
     Views: upright + h (+ v). For each flipped view:
-      * --fct_sup 1   it is ALSO supervised: structure_loss of its flipped-back
-                      P1 and P2 against the GT. Every view's supervised term is
+      * --fct_sup 1   it is ALSO supervised: the host's loss (structure_loss of P1
+                      and P2) on its flipped-back heads. Every view's supervised term is
                       weighted 1/n_views, so the total supervised scale equals
                       one view. This is deterministic flip augmentation; the
                       consistency term is what comes on top of it.
@@ -372,7 +357,8 @@ def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
     sup_w = 1.0 / n_views if opt.fct_sup else 1.0
     n = images.shape[0] if opt.fct_sub <= 0 else min(opt.fct_sub, images.shape[0])
 
-    z_o = (P1 + P2).detach().float()[:n]
+    z_up = HOST.logit(heads)                   # the upright prediction, with gradient
+    z_o = z_up.detach().float()[:n]
     p_o = torch.sigmoid(z_o)
     eps = 0.0
     yb = (gts[:n].float() > 0.5).float()
@@ -403,15 +389,15 @@ def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
                 if rng0 is not None:
                     _rng_restore(rng0)
                 with autocast(enabled=bool(opt.amp)):
-                    a, b = model(f(images[:n]))
-                p_k = torch.sigmoid((f(a) + f(b)).float())
+                    out_k = HOST.heads(model(f(images[:n])))
+                p_k = torch.sigmoid(HOST.logit([f(h) for h in out_k]).float())
                 e_k = (p_k - yb).abs()
                 best_p = torch.where(e_k < best_e, p_k, best_p)
                 best_e = torch.minimum(e_k, best_e)
         for m, mom in zip(bns, moms):
             m.momentum = mom
         gate_up = (best_e < e_o).float()
-        per_up = F.binary_cross_entropy_with_logits((P1 + P2)[:n].float(), best_p, reduction='none')
+        per_up = F.binary_cross_entropy_with_logits(z_up[:n].float(), best_p, reduction='none')
         up_loss = _wsum_reduce(per_up, gate_up, hw)
         frac = float(gate_up.mean())           # share of upright pixels a flip beats
         state['up_frac'] = frac if state.get('up_frac') is None else 0.98 * state['up_frac'] + 0.02 * frac
@@ -431,15 +417,15 @@ def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
         if rng0 is not None:
             _rng_restore(rng0)                 # same depth mask as the upright view
         with autocast(enabled=bool(opt.amp)):
-            p1f, p2f = model(f(images[:n]))
-            p1f, p2f = f(p1f), f(p2f)          # back to the upright frame
+            heads_f = [f(h) for h in HOST.heads(model(f(images[:n])))]   # back to the upright frame
             sup_f = None
             if opt.fct_sup:
-                sup_f = structure_loss(p1f, gts[:n]) + structure_loss(p2f, gts[:n])
+                sup_f = HOST.sup_loss(heads_f, gts[:n])
         cons_f = None
         if lam > 0:
+            z_f = HOST.logit(heads_f)
             fix = (gate_o, yb) if opt.fct_weit == 7 else (None, None)
-            per, dis = _per_pixel_consistency(p1f + p2f, z_o, p_o, opt.fct_loss, *fix)
+            per, dis = _per_pixel_consistency(z_f, z_o, p_o, opt.fct_loss, *fix)
             if opt.fct_weit in (3, 4, 5, 6, 7, 8):
                 if opt.fct_weit == 3:          # error gate, all pixels in the divisor
                     w_v, den = gate_o, hw
@@ -456,7 +442,7 @@ def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
                     # kept only as much as the upright is confidently right, 1 - a e_o. The
                     # default a = 2 (--fct_lm_a) makes that the upright's margin, 0 exactly where
                     # the upright turns wrong; other values are for the sweep. w is never above 1.
-                    p_f = torch.sigmoid((p1f + p2f).detach().float())
+                    p_f = torch.sigmoid(z_f.detach().float())
                     e_o, e_f = (p_o - yb).abs(), (p_f - yb).abs()
                     w_v = torch.where(e_f >= e_o, torch.ones_like(e_o),
                                       (1.0 - opt.fct_lm_a * e_o).clamp(min=0.0))
@@ -465,7 +451,7 @@ def _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0, opt, state,
                     lead_sum = lead_sum + lead.mean()
                     wl_sum = wl_sum + (lead * (1.0 - gate_o)).mean()   # ... and the upright is wrong
                 else:                          # relative gate: upright closer to y than this view
-                    p_f = torch.sigmoid((p1f + p2f).detach().float())
+                    p_f = torch.sigmoid(z_f.detach().float())
                     w_v = ((p_o - yb).abs() < (p_f - yb).abs()).float()
                     den = hw
                 cons_f = _wsum_reduce(per, w_v, den)
@@ -559,15 +545,15 @@ def train(train_loader, model, optimizer, epoch, opt, state):
 
             # ---- supervised view ------------------------------------------
             with autocast(enabled=bool(opt.amp)):
-                P1, P2 = model(images)
-                loss = structure_loss(P1, gts) + structure_loss(P2, gts)
+                heads = HOST.heads(model(images))
+                loss = HOST.sup_loss(heads, gts)
                 # Target for the consistency term, taken from this same
                 # forward. In seq mode it is detached so this graph can be
                 # freed immediately.
-                p_o = torch.sigmoid(P1 + P2) if do_fct else None
+                p_o = torch.sigmoid(HOST.logit(heads)) if do_fct else None
 
             if do_fct and v2:
-                loss = _fct_v2_step(model, images, gts, P1, P2, loss, lam, rng0,
+                loss = _fct_v2_step(model, images, gts, heads, loss, lam, rng0,
                                     opt, state, cons_record, _bw, rate == 1)
             elif do_fct and opt.fct_mode == 'seq':
                 p_o = p_o.detach()
@@ -671,7 +657,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', type=int, default=100)
     parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--optimizer', type=str, default='AdamW')
+    parser.add_argument('--optimizer', type=str, default='AdamW',
+                        help='AdamW (weight decay 1e-4, the stock recipe), Adam (no weight '
+                             'decay, as in PraNet-V2) or anything else for SGD')
+    parser.add_argument('--host', type=str, default='polyppvt', choices=sorted(HOSTS),
+                        help='the model to train: polyppvt (this repo), cascade (PVT-CASCADE) '
+                             'or pranetv2 (PraNet-V2, Res2Net-50), each with its paper\'s loss. '
+                             'See hosts.py')
+    parser.add_argument('--host_root', type=str, default=None,
+                        help='your clone of the host\'s code (default ../CASCADE or '
+                             '../PraNet-V2/binary_seg; setup_hosts.sh makes them)')
     parser.add_argument('--batchsize', type=int, default=16)
     parser.add_argument('--trainsize', type=int, default=352)
     parser.add_argument('--clip', type=float, default=0.5)
@@ -823,11 +818,8 @@ if __name__ == '__main__':
                         level=logging.INFO, filemode='a', datefmt='%Y-%m-%d %I:%M:%S %p')
 
     # Preflight: fail now with a clear message rather than after the data loads.
-    _pre = './pretrained_pth/pvt_v2_b2.pth'
-    if not os.path.isfile(_pre):
-        raise FileNotFoundError(
-            'Missing backbone weights at {} -- PolypPVT.__init__ hardcodes this '
-            'path and will crash on construction.'.format(_pre))
+    HOST = get_host(opt.host, opt.host_root)
+    HOST.preflight()
     for _d in ('{}/images/'.format(opt.train_path), '{}/masks/'.format(opt.train_path)):
         if not os.path.isdir(_d):
             raise FileNotFoundError('Missing training directory: {}'.format(_d))
@@ -842,12 +834,12 @@ if __name__ == '__main__':
         np.random.seed(opt.seed)
         torch.manual_seed(opt.seed)
         torch.cuda.manual_seed_all(opt.seed)
-    model = PolypPVT().cuda()
+    model = HOST.build().cuda()
 
     # Stochastic depth. Must be 0 for FCT to measure flip non-equivariance
     # rather than depth-mask noise; must match across arms either way.
-    model.backbone.reset_drop_path(opt.drop_path)
-    if opt.fct and opt.drop_path > 0 and not opt.fct_sync_rng:
+    drop_path = HOST.set_drop_path(model, opt.drop_path)   # None: the model has none
+    if opt.fct and drop_path and not opt.fct_sync_rng:
         print('!' * 78)
         print('WARNING: --fct 1, --drop_path {:.3f}, --fct_sync_rng 0.'.format(opt.drop_path))
         print('  Stochastic depth is active and the views are NOT sharing a depth')
@@ -859,6 +851,8 @@ if __name__ == '__main__':
     params = model.parameters()
     if opt.optimizer == 'AdamW':
         optimizer = torch.optim.AdamW(params, opt.lr, weight_decay=1e-4)
+    elif opt.optimizer == 'Adam':
+        optimizer = torch.optim.Adam(params, opt.lr)
     else:
         optimizer = torch.optim.SGD(params, opt.lr, weight_decay=1e-4, momentum=0.9)
     print(optimizer)
@@ -874,6 +868,8 @@ if __name__ == '__main__':
                               trainsize=opt.trainsize, augmentation=_aug)
 
     print('#' * 20, 'Start Training (no orientation augmentation)', '#' * 20)
+    print('MODEL')
+    print('  ' + HOST.describe())
     print('AUGMENTATION IN EFFECT')
     print('  orientation (flip/rotate) : {}'.format(
         'ON   (RandomRotation + V/H flips) -- DIAGNOSTIC ARM' if opt.orientation_aug else 'OFF'))
@@ -882,9 +878,12 @@ if __name__ == '__main__':
         print('     symmetry the consistency term constrains. Not an FCT measurement.')
     print('  photometric               : OFF  (this repo has none)')
     print('  multi-scale [0.75,1,1.25] : {}'.format('ON' if opt.multiscale else 'OFF'))
-    print('  stochastic depth          : {:.3f}{}'.format(
-        opt.drop_path,
-        '  (mask shared across views)' if (opt.fct and opt.fct_sync_rng) else ''))
+    if drop_path is None:
+        print('  stochastic depth          : none in this model')
+    else:
+        print('  stochastic depth          : {:.3f}{}'.format(
+            drop_path,
+            '  (mask shared across views)' if (opt.fct and opt.fct_sync_rng) else ''))
     print('DATA')
     _n_img = len([f for f in os.listdir(image_root)
                   if f.lower().endswith(('.jpg', '.png'))])
@@ -941,3 +940,6 @@ if __name__ == '__main__':
     for epoch in range(1, opt.epoch):
         adjust_lr(optimizer, opt.lr, epoch, 0.1, 200)
         train(train_loader, model, optimizer, epoch, opt, state)
+    # run_seeds.sh looks for this line to tell a finished run from an interrupted one.
+    print('=== training finished: {} epochs, best five-set mean {:.4f}'.format(
+        opt.epoch - 1, state['best']))
