@@ -258,6 +258,14 @@ def _flat_grad(model):
                       for p in model.parameters()])
 
 
+def _parts(k, images, gts, extra):
+    """The batch as k parts for --accum; with k <= 1, one part: the batch itself."""
+    if k <= 1:
+        return [(images, gts, extra)]
+    split = [t.tensor_split(k) for t in [images, gts] + extra]
+    return [(p[0], p[1], list(p[2:])) for p in zip(*split) if p[0].shape[0]]
+
+
 def _fct_v2(opt):
     """True when any v2 option is set; otherwise the v1 code path runs unchanged."""
     return bool(opt.fct) and bool(opt.fct_sup or opt.fct_loss != 'mse' or opt.fct_weit
@@ -327,11 +335,12 @@ def evaluate_all(model, test_root):
 
 # ---------------------------------------------------------------- train loop
 def _fct_v2_step(model, images, gts, heads, loss, lam, rng0, opt, state,
-                 cons_record, _bw, unit_rate):
+                 cons_record, _bw, unit_rate, extra=()):
     """One FCT step with the v2 options (seq mode only).
 
     `heads` are the upright view's output maps (P1, P2 for Polyp-PVT) and `loss`
-    their supervised loss; the prediction is HOST.logit(heads).
+    their supervised loss; the prediction is HOST.logit(heads). `extra` holds any
+    further targets the host's loss takes (ASGNet's edges), in the upright frame.
 
     Views: upright + h (+ v). For each flipped view:
       * --fct_sup 1   it is ALSO supervised: the host's loss (structure_loss of P1
@@ -420,7 +429,7 @@ def _fct_v2_step(model, images, gts, heads, loss, lam, rng0, opt, state,
             heads_f = [f(h) for h in HOST.heads(model(f(images[:n])))]   # back to the upright frame
             sup_f = None
             if opt.fct_sup:
-                sup_f = HOST.sup_loss(heads_f, gts[:n])
+                sup_f = HOST.sup_loss(heads_f, gts[:n], *[e[:n] for e in extra])
         cons_f = None
         if lam > 0:
             z_f = HOST.logit(heads_f)
@@ -507,11 +516,13 @@ def train(train_loader, model, optimizer, epoch, opt, state):
     cons_record = AvgMeter()
 
     for i, pack in enumerate(train_loader, start=1):
+        HOST.progress = i / state['total_step']    # this batch's place in the epoch (ASGNet's loss uses it)
         for rate in size_rates:
             optimizer.zero_grad()
-            images, gts = pack
+            images, gts, *extra = pack             # extra: targets a host's own loader adds (ASGNet's edges)
             images = Variable(images).cuda()
             gts = Variable(gts).cuda()
+            extra = [Variable(e).cuda() for e in extra]
 
             trainsize = int(round(opt.trainsize * rate / 32) * 32)
             if rate != 1:
@@ -519,13 +530,10 @@ def train(train_loader, model, optimizer, epoch, opt, state):
                                     mode='bilinear', align_corners=True)
                 gts = F.upsample(gts, size=(trainsize, trainsize),
                                  mode='bilinear', align_corners=True)
+                extra = [F.upsample(e, size=(trainsize, trainsize), mode='bilinear',
+                                    align_corners=True) for e in extra]
 
             do_fct = bool(opt.fct) and (rate == 1 or v2 and opt.fct_all_scales)
-            # Snapshot the RNG so every view of this sample can be given the
-            # SAME stochastic-depth mask. Without this, f(x) and f(flip x) draw
-            # independent DropPath masks and the consistency term measures that
-            # noise instead of flip non-equivariance.
-            rng0 = _rng_snapshot() if (do_fct and opt.fct_sync_rng) else None
             lam = 0.0
             if do_fct:
                 it = state['iter']
@@ -536,54 +544,70 @@ def train(train_loader, model, optimizer, epoch, opt, state):
                 if rate == 1:
                     state['iter'] += 1
 
-            def _bw(t, retain=False):
-                """Backward one term, accumulating into .grad."""
-                if scaler is not None:
-                    scaler.scale(t).backward(retain_graph=retain)
-                else:
-                    t.backward(retain_graph=retain)
+            # --accum k: the batch runs as k parts, each backwarded with weight (part
+            # size / batch size), and the optimizer steps once, so the batch-mean losses
+            # add up to the whole batch's in a fraction of the memory.
+            n_batch, loss_sum = images.shape[0], 0.0
+            for images, gts, extra in _parts(opt.accum, images, gts, extra):
+                w_part = images.shape[0] / n_batch
+                # Snapshot the RNG so every view of this sample can be given the
+                # SAME stochastic-depth mask. Without this, f(x) and f(flip x) draw
+                # independent DropPath masks and the consistency term measures that
+                # noise instead of flip non-equivariance.
+                rng0 = _rng_snapshot() if (do_fct and opt.fct_sync_rng) else None
 
-            # ---- supervised view ------------------------------------------
-            with autocast(enabled=bool(opt.amp)):
-                heads = HOST.heads(model(images))
-                loss = HOST.sup_loss(heads, gts)
-                # Target for the consistency term, taken from this same
-                # forward. In seq mode it is detached so this graph can be
-                # freed immediately.
-                p_o = torch.sigmoid(HOST.logit(heads)) if do_fct else None
+                def _bw(t, retain=False):
+                    """Backward one term, accumulating into .grad."""
+                    if w_part != 1.0:
+                        t = t * w_part
+                    if scaler is not None:
+                        scaler.scale(t).backward(retain_graph=retain)
+                    else:
+                        t.backward(retain_graph=retain)
 
-            if do_fct and v2:
-                loss = _fct_v2_step(model, images, gts, heads, loss, lam, rng0,
-                                    opt, state, cons_record, _bw, rate == 1)
-            elif do_fct and opt.fct_mode == 'seq':
-                p_o = p_o.detach()
-                _bw(loss)                      # frees the supervised graph NOW
-                n = images.shape[0] if opt.fct_sub <= 0 else min(opt.fct_sub, images.shape[0])
-                w = 0.5 * lam if opt.fct_vflip else lam
-                cons_total = 0.0
-                for flip in (['h', 'v'] if opt.fct_vflip else ['h']):
-                    f = _hflip if flip == 'h' else _vflip
-                    if rng0 is not None:
-                        _rng_restore(rng0)   # same depth mask as the main view
-                    with autocast(enabled=bool(opt.amp)):
-                        pf = f(_prob(model, f(images[:n])))
-                        c = F.mse_loss(pf, p_o[:n])
-                    _bw(w * c)                 # frees this view's graph NOW
-                    cons_total += float(c.detach())
-                cons_record.update(torch.tensor(cons_total / (2 if opt.fct_vflip else 1)),
-                                   opt.batchsize)
-            else:
-                if do_fct:
+                # ---- supervised view --------------------------------------
+                with autocast(enabled=bool(opt.amp)):
+                    heads = HOST.heads(model(images))
+                    loss = HOST.sup_loss(heads, gts, *extra)
+                    # Target for the consistency term, taken from this same
+                    # forward. In seq mode it is detached so this graph can be
+                    # freed immediately.
+                    p_o = torch.sigmoid(HOST.logit(heads)) if do_fct else None
+
+                if do_fct and v2:
+                    loss = _fct_v2_step(model, images, gts, heads, loss, lam, rng0,
+                                        opt, state, cons_record, _bw, rate == 1, extra)
+                elif do_fct and opt.fct_mode == 'seq':
+                    p_o = p_o.detach()
+                    _bw(loss)                      # frees the supervised graph NOW
                     n = images.shape[0] if opt.fct_sub <= 0 else min(opt.fct_sub, images.shape[0])
-                    if rng0 is not None:
-                        _rng_restore(rng0)
-                    with autocast(enabled=bool(opt.amp)):
-                        cons = flip_consistency(model, images[:n], p_o[:n],
-                                                use_vflip=bool(opt.fct_vflip),
-                                                rng0=rng0)
-                        loss = loss + lam * cons
-                    cons_record.update(cons.data, opt.batchsize)
-                _bw(loss)
+                    w = 0.5 * lam if opt.fct_vflip else lam
+                    cons_total = 0.0
+                    for flip in (['h', 'v'] if opt.fct_vflip else ['h']):
+                        f = _hflip if flip == 'h' else _vflip
+                        if rng0 is not None:
+                            _rng_restore(rng0)   # same depth mask as the main view
+                        with autocast(enabled=bool(opt.amp)):
+                            pf = f(_prob(model, f(images[:n])))
+                            c = F.mse_loss(pf, p_o[:n])
+                        _bw(w * c)                 # frees this view's graph NOW
+                        cons_total += float(c.detach())
+                    cons_record.update(torch.tensor(cons_total / (2 if opt.fct_vflip else 1)),
+                                       opt.batchsize)
+                else:
+                    if do_fct:
+                        n = images.shape[0] if opt.fct_sub <= 0 else min(opt.fct_sub, images.shape[0])
+                        if rng0 is not None:
+                            _rng_restore(rng0)
+                        with autocast(enabled=bool(opt.amp)):
+                            cons = flip_consistency(model, images[:n], p_o[:n],
+                                                    use_vflip=bool(opt.fct_vflip),
+                                                    rng0=rng0)
+                            loss = loss + lam * cons
+                        cons_record.update(cons.data, opt.batchsize)
+                    _bw(loss)
+                if opt.accum > 1:
+                    loss_sum += float(loss.detach()) * w_part
 
             if scaler is not None:
                 scaler.unscale_(optimizer)      # clip on real, unscaled grads
@@ -598,7 +622,7 @@ def train(train_loader, model, optimizer, epoch, opt, state):
                 state['ema_step'] += 1
 
             if rate == 1:
-                loss_record.update(loss.data, opt.batchsize)
+                loss_record.update(loss.data if opt.accum <= 1 else torch.tensor(loss_sum), opt.batchsize)
 
         if i % 20 == 0 or i == state['total_step']:
             msg = ('{} Epoch [{:03d}/{:03d}], Step [{:04d}/{:04d}], loss: {:0.4f}'
@@ -798,6 +822,10 @@ if __name__ == '__main__':
                              'Default keeps only best + last')
     parser.add_argument('--eval_every', type=int, default=1,
                         help='evaluate the 5 test sets every N epochs')
+    parser.add_argument('--accum', type=int, default=1,
+                        help='run each batch as this many parts and step once (gradient '
+                             'accumulation), so a paper\'s batch size fits on one GPU; the '
+                             'effective batch stays --batchsize')
 
     opt = parser.parse_args()
     if _fct_v2(opt) and opt.fct_mode != 'seq':
@@ -819,7 +847,7 @@ if __name__ == '__main__':
 
     # Preflight: fail now with a clear message rather than after the data loads.
     HOST = get_host(opt.host, opt.host_root)
-    HOST.preflight()
+    HOST.preflight(opt)
     for _d in ('{}/images/'.format(opt.train_path), '{}/masks/'.format(opt.train_path)):
         if not os.path.isdir(_d):
             raise FileNotFoundError('Missing training directory: {}'.format(_d))
@@ -860,23 +888,30 @@ if __name__ == '__main__':
     image_root = '{}/images/'.format(opt.train_path)
     gt_root = '{}/masks/'.format(opt.train_path)
 
-    # The loader gates on `augmentations == 'True'` -- a STRING compare -- so
-    # the string is what turns it on. Anything else (including the bool True)
-    # lands in the no-augmentation branch: Resize -> ToTensor -> Normalize.
-    _aug = 'True' if opt.orientation_aug else False
-    train_loader = get_loader(image_root, gt_root, batchsize=opt.batchsize,
-                              trainsize=opt.trainsize, augmentation=_aug)
+    # A host may train with its paper's own loader and augmentation (ASGNet's edges,
+    # flips, crops, rotation, colour and label noise); otherwise this repo's.
+    train_loader = HOST.train_loader(opt)
+    if train_loader is None:
+        # The loader gates on `augmentations == 'True'` -- a STRING compare -- so
+        # the string is what turns it on. Anything else (including the bool True)
+        # lands in the no-augmentation branch: Resize -> ToTensor -> Normalize.
+        _aug = 'True' if opt.orientation_aug else False
+        train_loader = get_loader(image_root, gt_root, batchsize=opt.batchsize,
+                                  trainsize=opt.trainsize, augmentation=_aug)
 
     print('#' * 20, 'Start Training (no orientation augmentation)', '#' * 20)
     print('MODEL')
     print('  ' + HOST.describe())
     print('AUGMENTATION IN EFFECT')
-    print('  orientation (flip/rotate) : {}'.format(
-        'ON   (RandomRotation + V/H flips) -- DIAGNOSTIC ARM' if opt.orientation_aug else 'OFF'))
-    if opt.orientation_aug and opt.fct:
-        print('  !! --orientation_aug with --fct: the augmentation supplies the very')
-        print('     symmetry the consistency term constrains. Not an FCT measurement.')
-    print('  photometric               : OFF  (this repo has none)')
+    if HOST.loader_note:
+        print('  ' + HOST.loader_note)
+    else:
+        print('  orientation (flip/rotate) : {}'.format(
+            'ON   (RandomRotation + V/H flips) -- DIAGNOSTIC ARM' if opt.orientation_aug else 'OFF'))
+        if opt.orientation_aug and opt.fct:
+            print('  !! --orientation_aug with --fct: the augmentation supplies the very')
+            print('     symmetry the consistency term constrains. Not an FCT measurement.')
+        print('  photometric               : OFF  (this repo has none)')
     print('  multi-scale [0.75,1,1.25] : {}'.format('ON' if opt.multiscale else 'OFF'))
     if drop_path is None:
         print('  stochastic depth          : none in this model')
@@ -896,15 +931,18 @@ if __name__ == '__main__':
         print('     (900 Kvasir + 550 CVC-ClinicDB). Results are NOT comparable')
         print('     to the released checkpoint, which was trained on the full set.')
     print('TRAINING')
-    print('  batchsize {}  trainsize {}  amp {}  epochs {} (loop runs 1..{})'.format(
-        opt.batchsize, opt.trainsize, bool(opt.amp), opt.epoch, opt.epoch - 1))
+    print('  batchsize {}{}  trainsize {}  amp {}  epochs {} (loop runs 1..{})'.format(
+        opt.batchsize, ' as {} parts (--accum)'.format(opt.accum) if opt.accum > 1 else '',
+        opt.trainsize, bool(opt.amp), opt.epoch, opt.epoch - 1))
     # adjust_lr is called with a hardcoded decay_epoch of 200, so for any run
     # shorter than that decay = 0.1**0 = 1 and the multiply is a no-op: the
     # learning rate never changes. --decay_rate and --decay_epoch are parsed
     # but never read. Both are stock behaviour, left alone so the recipe stays
     # faithful to the released one, but stated here so nobody assumes a
-    # schedule that is not running.
-    print('  lr {} CONSTANT (no decay; --decay_rate/--decay_epoch are inert)'.format(opt.lr))
+    # schedule that is not running. A host can bring its paper's schedule instead.
+    lr_schedule = HOST.lr_schedule(optimizer, opt)
+    print('  lr {} {}'.format(opt.lr, HOST.lr_note if lr_schedule else
+                              'CONSTANT (no decay; --decay_rate/--decay_epoch are inert)'))
     if opt.fct and _fct_v2(opt):
         print('  FCT v2: flipped views supervised {}, consistency {} x {:.3f}{}, vflip {}, '
               'warmup {}, all scales {}, sub {}, grad_diag {}'.format(
@@ -938,7 +976,10 @@ if __name__ == '__main__':
         for _p in state['ema'].parameters():
             _p.requires_grad_(False)
     for epoch in range(1, opt.epoch):
-        adjust_lr(optimizer, opt.lr, epoch, 0.1, 200)
+        if lr_schedule is None:
+            adjust_lr(optimizer, opt.lr, epoch, 0.1, 200)
+        else:
+            lr_schedule(epoch)
         train(train_loader, model, optimizer, epoch, opt, state)
     # run_seeds.sh looks for this line to tell a finished run from an interrupted one.
     print('=== training finished: {} epochs, best five-set mean {:.4f}'.format(

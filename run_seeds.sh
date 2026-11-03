@@ -40,6 +40,9 @@
 #  FCT on the two other models (bash setup_hosts.sh once first), each scored against
 #  its own vanilla on the same seeds, about 85 GPU-hours for six seeds:
 #      ARMS="cascade_vanilla cascade_s3lmup pranetv2_vanilla pranetv2_s3lmup" nohup bash run_seeds.sh 1 2 3 4 5 6 > seeds_hosts.out 2>&1 &
+#  or one model per GPU, for example:
+#      CUDA_VISIBLE_DEVICES=0 ARMS="asgnet_vanilla asgnet_s3lmup" bash run_seeds.sh 1 2 3 4 5 6 2>&1 | tee seeds_asgnet.out
+#      CUDA_VISIBLE_DEVICES=1 ARMS="hgm_vanilla hgm_s3lmup" bash run_seeds.sh 1 2 3 4 5 6 2>&1 | tee seeds_hgm.out
 # =============================================================================
 set -u
 SEEDS="${*:-2 3 4 5 6}"
@@ -58,6 +61,8 @@ vanilla_of() {   # run_1288.sh stage -> the vanilla run it is scored against
   case "$1" in
     cascade_*)  echo CASCADE_VANILLA ;;
     pranetv2_*) echo PRANETV2_VANILLA ;;
+    asgnet_*)   echo ASGNET_VANILLA ;;
+    hgm_*)      echo HGM_VANILLA ;;
     *)          echo PVT_VANILLA ;;
   esac
 }

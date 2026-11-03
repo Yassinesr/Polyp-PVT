@@ -1,4 +1,4 @@
-"""The models FCT can train (--host): Polyp-PVT and two hosts from other papers.
+"""The models FCT can train (--host): Polyp-PVT and hosts from other papers.
 
 A host says how to build its model, which of its outputs make the prediction, and the
 paper's own supervised loss for one view. Train_noaug.py, Test_tta.py and flip_gap.py go
@@ -14,12 +14,21 @@ host and the vanilla arm keeps each paper's loss.
              four background maps; prediction: the sum of the foreground maps, as in its
              MyTest_med.py; loss: its foreground/background structure loss on each pair,
              as in its MyTrain_med.py.
+  asgnet     ASGNet on PVTv2-b3 (Sun et al., IEEE TCSVT 2026). Four deep-supervision
+             maps, the final map (the prediction, as in its Test.py) and four edge maps;
+             loss: its structure, edge-Dice and uncertainty terms; its own data loader
+             (with edges and augmentation) and learning-rate schedule, as in its
+             Train_PS_R_PVTV3_edge1_new1.py.
+  hgm        HGM, Hybrid Graph Mamba on PVTv2-b2 (Zhu et al., MICCAI 2025). One output
+             map; loss: the structure loss; its x0.1 learning-rate step every 50 epochs,
+             as in its MyTrain.py. Both arms start from ImageNet weights, see HGMHost.
 
-No code from either paper is copied here: CASCADE's licence does not allow it to be
-redistributed. --host_root points at your own clone, and the model class is imported
-from it unchanged; setup_hosts.sh clones both at the commits this was tested on.
+No code from these papers is copied here: CASCADE's licence does not allow it to be
+redistributed, and HGM's repo has no licence. --host_root points at your own clone,
+and the model (and ASGNet's data loader) is imported from it unchanged; setup_hosts.sh
+clones each at the commit this was tested on.
 
-  python hosts.py        # build each host on the CPU and run one forward
+  python hosts.py        # build each host and run one forward (on the GPU if there is one)
 """
 import os
 import sys
@@ -28,14 +37,18 @@ import argparse
 import importlib
 import subprocess
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _CLASH = ('lib', 'utils')            # package names the hosts share with this repo
-ROOTS = {'cascade': '../CASCADE', 'pranetv2': '../PraNet-V2/binary_seg'}
+ROOTS = {'cascade': '../CASCADE', 'pranetv2': '../PraNet-V2/binary_seg',
+         'asgnet': '../ASGNet/ASGNet_26_TCSVT', 'hgm': '../HGM'}
 COMMITS = {'cascade': 'd3f050ad6337ef1d8213367eefb5e141bcf2ce75',
-           'pranetv2': 'ca08522ae77cbda6c5056609e7951b502dbb08f2'}
+           'pranetv2': 'ca08522ae77cbda6c5056609e7951b502dbb08f2',
+           'asgnet': '97c4e746e94bb6a184a14775b771226eed88c3e2',
+           'hgm': '49ae05afc9785dbbc5a303d39e63588b068e5328'}
 
 
 def _boundary_weight(mask):
@@ -80,6 +93,34 @@ def structure_loss_fgbg(pred, pred_bg, mask_fg, mask_bg):
     union = ((pred + mask_fg) * weit).sum(dim=(2, 3))
     wiou = 1 - (inter + 1) / (union - inter + 1)
     return (wbce + wiou + 0.8 * wbce2).mean()
+
+
+def asgnet_dice(predict, target):
+    """ASGNet's edge loss, dice_loss in its training script (on the edge maps as they come)."""
+    smooth = 1
+    p = 2
+    valid_mask = torch.ones_like(target)
+    predict = predict.contiguous().view(predict.shape[0], -1)
+    target = target.contiguous().view(target.shape[0], -1)
+    valid_mask = valid_mask.contiguous().view(valid_mask.shape[0], -1)
+    num = torch.sum(torch.mul(predict, target) * valid_mask, dim=1) * 2 + smooth
+    den = torch.sum((predict.pow(p) + target.pow(p)) * valid_mask, dim=1) + smooth
+    loss = 1 - num / den
+    return loss.mean()
+
+
+def asgnet_ual(seg_logits):
+    """ASGNet's uncertainty loss, cal_ual in its utils/utils.py: low where the
+    prediction is confident either way."""
+    sigmoid_x = seg_logits.sigmoid()
+    loss_map = 1 - (2 * sigmoid_x - 1).abs().pow(2)
+    return loss_map.mean()
+
+
+def asgnet_ual_coef(progress):
+    """ASGNet's get_coef(i / total_step, 'cos'): its weight on the uncertainty loss, rising
+    from 0 to 1 over every epoch (i counts the batches of the epoch)."""
+    return (1 - np.cos(progress * np.pi)) / 2
 
 
 def _import_from(root, name):
@@ -130,6 +171,10 @@ class PolypPVTHost:
     name, paper = 'polyppvt', 'Polyp-PVT (this repo)'
     weights = './pretrained_pth/pvt_v2_b2.pth'     # hard-coded in PolypPVT.__init__
     module = None                                  # the clone file the model comes from
+    n_extra = 0           # further targets sup_loss takes after the mask (ASGNet: its edges)
+    loader_note = None    # what the host's own training loader does, when it has one
+    lr_note = None        # how the learning rate moves, when the host has its own schedule
+    progress = 0.0        # this batch's place in the epoch, set by Train_noaug.py
 
     def __init__(self, root=None):
         self.root = None if root is None else os.path.abspath(os.path.expanduser(root))
@@ -137,6 +182,16 @@ class PolypPVTHost:
     def build(self):
         from lib.pvt import PolypPVT
         return PolypPVT()
+
+    def train_loader(self, opt):
+        """The paper's own training loader, or None for this repo's (Resize, ToTensor,
+        Normalize; no augmentation)."""
+        return None
+
+    def lr_schedule(self, optimizer, opt):
+        """A function of the epoch that sets the learning rate as the paper's script
+        does, or None for the stock constant rate."""
+        return None
 
     def heads(self, out):
         """The model's outputs as a list of logit maps, all at the input size."""
@@ -149,7 +204,7 @@ class PolypPVTHost:
             z = z + h
         return z
 
-    def sup_loss(self, heads, gts):
+    def sup_loss(self, heads, gts, *extra):
         """The paper's supervised loss for one view: the structure loss on each head."""
         loss = structure_loss(heads[0], gts)
         for h in heads[1:]:
@@ -161,7 +216,7 @@ class PolypPVTHost:
         model.backbone.reset_drop_path(rate)
         return rate
 
-    def preflight(self):
+    def preflight(self, opt=None):
         """Fail now with a clear message rather than after the data loads."""
         if self.module and not os.path.isfile(os.path.join(self.root or '', self.module)):
             raise FileNotFoundError(
@@ -218,7 +273,7 @@ class PraNetV2Host(PolypPVTHost):
     def logit(self, heads):
         return heads[0] + heads[1] + heads[2] + heads[3]   # MyTest_med.py: p2 + p3 + p4 + p5
 
-    def sup_loss(self, heads, gts):
+    def sup_loss(self, heads, gts, *extra):
         # MyTrain_med.py: loss5 .. loss2 on the map pairs 2 .. 5, summed as loss2 + loss3 + loss4 + loss5
         fg, bg, mask_bg = heads[:4], heads[4:], 1 - gts
         loss = structure_loss_fgbg(fg[3], bg[3], gts, mask_bg)
@@ -230,7 +285,122 @@ class PraNetV2Host(PolypPVTHost):
         return None                                        # Res2Net has no stochastic depth
 
 
-HOSTS = {h.name: h for h in (PolypPVTHost, CascadeHost, PraNetV2Host)}
+class ASGNetHost(PolypPVTHost):
+    """ASGNet (PVTv2-b3): maps p0, f4, f3, f2 (deep supervision), f1 (the prediction) and
+    edge maps e2, e3, e4, e1, trained with its own loss, data loader and schedule.
+
+    Its training script runs one scale at 352, batch 40, Adam 1e-4, 80 epochs (the loop
+    runs 79), in full precision: its FFT blocks cannot run in half precision at these
+    feature sizes. Its backbone is built without stochastic depth.
+    """
+    name, paper = 'asgnet', 'ASGNet, PVTv2-b3 (Sun et al., IEEE TCSVT 2026)'
+    weights = './pretrained_pth/pvt_v2_b3.pth'
+    module = 'lib/Network_PVTV3_PS_edge_1_new.py'
+    n_extra = 1
+    loader_note = ("ASGNet's own loader (its utils/data_val.py): random horizontal flip, crop, "
+                   "rotation, colour and label noise; edges from <train_path>/edges")
+    lr_note = ('reset to --lr every epoch, then CosineAnnealingLR(T_max=20, eta_min=1e-7).step(), '
+               'as in its training script')
+
+    def build(self):
+        net = _import_from(self.root, 'lib.Network_PVTV3_PS_edge_1_new')
+        # Its Network.__init__ loads '/pvt_v2_b3.pth' from the filesystem root; read ours instead.
+        load, weights = torch.load, os.path.abspath(self.weights)
+
+        def redirected(f, *a, **k):
+            return load(weights if f == '/pvt_v2_b3.pth' else f, *a, **k)
+        torch.load = redirected
+        try:
+            return net.Network(channels=96)               # as in its training script
+        finally:
+            torch.load = load
+
+    def logit(self, heads):
+        return heads[4]                                   # Test.py: result[4]
+
+    def sup_loss(self, heads, gts, edges):
+        # Its train(): the terms in its order, the uncertainty weight from this batch's place in the epoch
+        ual_loss = asgnet_ual(heads[4]) * asgnet_ual_coef(self.progress)
+        loss_init = structure_loss(heads[0], gts) * 0.0625 + structure_loss(heads[1], gts) * 0.125 + \
+            structure_loss(heads[2], gts) * 0.25 + structure_loss(heads[3], gts) * 0.5
+        loss_final = structure_loss(heads[4], gts)
+        loss_edge = asgnet_dice(heads[5], edges) * 0.0625 + asgnet_dice(heads[6], edges) * 0.125 + \
+            asgnet_dice(heads[7], edges) * 0.25 + asgnet_dice(heads[8], edges) * 0.5
+        return loss_init + loss_final + loss_edge + 2 * ual_loss
+
+    def set_drop_path(self, model, rate):
+        model.shared_encoder.reset_drop_path(rate)
+        return rate
+
+    def train_loader(self, opt):
+        data = _import_from(self.root, 'utils.data_val')
+        root = os.path.join(opt.train_path, '')
+        return data.get_loader(image_root=root + 'images/', gt_root=root + 'masks/',
+                               edge_root=root + 'edges/', batchsize=opt.batchsize,
+                               trainsize=opt.trainsize, num_workers=8)
+
+    def lr_schedule(self, optimizer, opt):
+        cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=20, eta_min=1e-7)
+
+        def at_epoch(epoch):
+            for group in optimizer.param_groups:          # its adjust_lr(optimizer, lr, epoch, 0.1, 80)
+                group['lr'] = 0.1 ** (epoch // 80) * opt.lr
+            cosine.step()
+        return at_epoch
+
+    def preflight(self, opt=None):
+        super().preflight(opt)
+        if opt is not None:
+            n_img = len(os.listdir(os.path.join(opt.train_path, 'images')))
+            d = os.path.join(opt.train_path, 'edges')
+            n_edge = len(os.listdir(d)) if os.path.isdir(d) else 0
+            if n_edge != n_img:
+                raise FileNotFoundError('{} has {} edge maps for {} images: run python make_edges.py '
+                                        '(setup_hosts.sh does)'.format(d, n_edge, n_img))
+
+
+class HGMHost(PolypPVTHost):
+    """HGM (PVTv2-b2 with a hybrid graph-Mamba decoder): one output map, the structure loss.
+
+    Its MyTrain.py runs Polyp-PVT's three-scale loop at 352, batch 16, Adam 3e-5, 200
+    epochs, with the rate x0.1 at epochs 50, 100, 150 and 200, in full precision. HGM()
+    itself leaves the backbone at random weights, and MyTrain.py by default starts from
+    the authors' trained checkpoint (--pre_parameter best_parameter_HGM.pth); here both
+    arms start, like Polyp-PVT, from the ImageNet PVTv2-b2 weights.
+    """
+    name, paper = 'hgm', 'HGM, Hybrid Graph Mamba (Zhu et al., MICCAI 2025)'
+    module = 'lib/pvt.py'
+    lr_note = 'x0.1 at epochs 50, 100, 150 and 200 (its adjust_lr, decay_epoch 50)'
+
+    def build(self):
+        model = _import_from(self.root, 'lib.pvt').HGM()
+        state = torch.load(self.weights, map_location='cpu')   # ImageNet weights, as PolypPVT loads them
+        own = model.backbone.state_dict()
+        own.update({k: v for k, v in state.items() if k in own})
+        model.backbone.load_state_dict(own)
+        return model
+
+    def heads(self, out):
+        return [out]
+
+    def lr_schedule(self, optimizer, opt):
+        def at_epoch(epoch):
+            # its adjust_lr(optimizer, lr, e, 0.1, 50) with e = epoch - 1, since its loop counts from 0
+            if epoch % 50 == 0:
+                for group in optimizer.param_groups:
+                    group['lr'] *= 0.1
+        return at_epoch
+
+    def preflight(self, opt=None):
+        super().preflight(opt)
+        try:
+            import mamba_ssm  # noqa: F401
+        except ImportError as e:
+            raise ImportError('HGM needs mamba_ssm built for your CUDA (pip install mamba-ssm '
+                              '--no-build-isolation; setup_hosts.sh tries it): {}'.format(e))
+
+
+HOSTS = {h.name: h for h in (PolypPVTHost, CascadeHost, PraNetV2Host, ASGNetHost, HGMHost)}
 
 
 def get_host(name='polyppvt', root=None):
@@ -241,21 +411,24 @@ def get_host(name='polyppvt', root=None):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Build each host on the CPU and run one forward, '
-                                                 'to check a setup before a long run.')
-    parser.add_argument('--hosts', nargs='+', default=['cascade', 'pranetv2'], choices=sorted(HOSTS))
-    parser.add_argument('--cascade_root', default=ROOTS['cascade'])
-    parser.add_argument('--pranetv2_root', default=ROOTS['pranetv2'])
+    parser = argparse.ArgumentParser(description='Build each host and run one forward (on the GPU '
+                                                 'if there is one), to check a setup before a long run.')
+    parser.add_argument('--hosts', nargs='+', default=['cascade', 'pranetv2', 'asgnet', 'hgm'],
+                        choices=sorted(HOSTS))
+    for _name, _root in ROOTS.items():
+        parser.add_argument('--{}_root'.format(_name), default=_root)
     opt = parser.parse_args()
+    dev = 'cuda' if torch.cuda.is_available() else 'cpu'   # HGM's Mamba kernels need the GPU
     failed = False
     for name in opt.hosts:
         host = get_host(name, getattr(opt, name + '_root', None))
         try:
             host.preflight()
-            model = host.build().eval()
+            model = host.build().to(dev).eval()
             with torch.no_grad():
-                heads = host.heads(model(torch.zeros(1, 3, 352, 352)))
-                loss = host.sup_loss(heads, torch.zeros(1, 1, 352, 352))
+                heads = host.heads(model(torch.zeros(1, 3, 352, 352, device=dev)))
+                gts = torch.zeros(1, 1, 352, 352, device=dev)
+                loss = host.sup_loss(heads, gts, *[gts] * host.n_extra)
                 z = host.logit(heads)
             print('ok    {:<9s} {} maps of {}, prediction {}, loss {:.4f}'.format(
                 name, len(heads), tuple(heads[0].shape), tuple(z.shape), float(loss)))

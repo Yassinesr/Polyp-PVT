@@ -41,7 +41,18 @@
 #                    ../PraNet-V2/binary_seg), with its own loss and recipe: Adam 1e-4,
 #                    batch 8, --epoch 30 (the loop runs 29 epochs, as in its MyTrain_med.py)
 #  pranetv2_s3lmup   the same with FCT exactly as in s3lmup
-#                    Run setup_hosts.sh once before the host stages.
+#  asgnet_vanilla    ASGNet on PVTv2-b3 (TCSVT 2026), from ASGNET_ROOT (default
+#                    ../ASGNet/ASGNet_26_TCSVT), with its own loss, data loader (edges,
+#                    flips, crop, rotation, colour, label noise) and schedule: Adam 1e-4,
+#                    batch 40, one scale, 80 epochs (79 run), full precision
+#  asgnet_s3lmup     the same with FCT exactly as in s3lmup
+#  hgm_vanilla       HGM on PVTv2-b2 (MICCAI 2025), from HGM_ROOT (default ../HGM), with its
+#                    own loss and schedule: Adam 3e-5, batch 16, three scales, 200 epochs,
+#                    x0.1 every 50, full precision, from ImageNet weights
+#  hgm_s3lmup        the same with FCT exactly as in s3lmup
+#                    Run setup_hosts.sh once before the host stages. If a paper's batch does
+#                    not fit on one GPU, ASGNET_ACCUM=2 or HGM_ACCUM=2 runs it as two halves
+#                    and steps once (the effective batch is unchanged).
 #  gate          inference only: gate_share.py on existing checkpoints
 #
 #  SEED=<n> sets --seed and appends _s<n> to the run name (default: unseeded).
@@ -51,7 +62,8 @@
 #  Usage: bash run_1288.sh vanilla | vanilla_aug | s3f | s3err | s3gate | s3bgate | s3rel | s3sig
 #                          | s3sigy | s3lm | s3lmup | s3lmup_a05 | s3lmup_a10 | s3lmup_a15
 #                          | s3lmup_a30 | cascade_vanilla | cascade_s3lmup | pranetv2_vanilla
-#                          | pranetv2_s3lmup | gate
+#                          | pranetv2_s3lmup | asgnet_vanilla | asgnet_s3lmup | hgm_vanilla
+#                          | hgm_s3lmup | gate
 #         SEED=1 bash run_1288.sh s3err
 #         bash run_1288.sh all            # = s3err
 # =============================================================================
@@ -119,6 +131,18 @@ pranetv2_vanilla() { HOSTARGS="$PRANETV2"; train_arm PRANETV2_VANILLA$SFX $HOSTA
                        && infer_arm PRANETV2_VANILLA$SFX PolypPVT; }
 pranetv2_s3lmup()  { HOSTARGS="$PRANETV2"; train_arm PRANETV2_S3LMUP$SFX $HOSTARGS $PRANETV2_RECIPE $FCT --fct_weit 8 --fct_up 1 \
                        && infer_arm PRANETV2_S3LMUP$SFX PolypPVT; }
+ASGNET="--host asgnet --host_root ${ASGNET_ROOT:-../ASGNet/ASGNet_26_TCSVT}"
+ASGNET_RECIPE="--optimizer Adam --batchsize 40 --epoch 80 --multiscale 0 --amp 0 --drop_path 0 --accum ${ASGNET_ACCUM:-1}"
+HGM="--host hgm --host_root ${HGM_ROOT:-../HGM}"
+HGM_RECIPE="--optimizer Adam --lr 3e-5 --batchsize 16 --epoch 201 --amp 0 --accum ${HGM_ACCUM:-1}"
+asgnet_vanilla()   { HOSTARGS="$ASGNET"; train_arm ASGNET_VANILLA$SFX $HOSTARGS $ASGNET_RECIPE \
+                       && infer_arm ASGNET_VANILLA$SFX PolypPVT; }
+asgnet_s3lmup()    { HOSTARGS="$ASGNET"; train_arm ASGNET_S3LMUP$SFX $HOSTARGS $ASGNET_RECIPE $FCT --fct_weit 8 --fct_up 1 \
+                       && infer_arm ASGNET_S3LMUP$SFX PolypPVT; }
+hgm_vanilla()      { HOSTARGS="$HGM"; train_arm HGM_VANILLA$SFX $HOSTARGS $HGM_RECIPE --orientation_aug 0 \
+                       && infer_arm HGM_VANILLA$SFX PolypPVT; }
+hgm_s3lmup()       { HOSTARGS="$HGM"; train_arm HGM_S3LMUP$SFX $HOSTARGS $HGM_RECIPE $FCT --fct_weit 8 --fct_up 1 \
+                       && infer_arm HGM_S3LMUP$SFX PolypPVT; }
 gate()        { local ck=""; for a in S3F S3F_EMA S3W05 S3ERR; do [ -d "./model_pth/$a" ] && ck="$ck ./model_pth/$a"; done
                 python gate_share.py --pth_path $ck; }
 
@@ -142,6 +166,10 @@ case "$STAGE" in
   cascade_s3lmup)   cascade_s3lmup ;;
   pranetv2_vanilla) pranetv2_vanilla ;;
   pranetv2_s3lmup)  pranetv2_s3lmup ;;
+  asgnet_vanilla)   asgnet_vanilla ;;
+  asgnet_s3lmup)    asgnet_s3lmup ;;
+  hgm_vanilla)      hgm_vanilla ;;
+  hgm_s3lmup)       hgm_s3lmup ;;
   gate)        gate; exit 0 ;;
   all)         s3err ;;
   *)           echo "unknown stage: $STAGE"; exit 1 ;;
