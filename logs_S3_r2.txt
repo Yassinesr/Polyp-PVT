@@ -1,0 +1,74 @@
+AdamW (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    capturable: False
+    differentiable: False
+    eps: 1e-08
+    foreach: None
+    fused: None
+    lr: 0.0001
+    maximize: False
+    weight_decay: 0.0001
+)
+False
+no augmentation
+#################### Start Training (no orientation augmentation) ####################
+AUGMENTATION IN EFFECT
+  orientation (flip/rotate) : OFF
+  photometric               : OFF  (this repo has none)
+  multi-scale [0.75,1,1.25] : ON
+  stochastic depth          : 0.100  (mask shared across views)
+DATA
+  train images on disk       : 1288
+  usable pairs after filter  : 1288
+  !! the standard Polyp-PVT / PraNet split is 1450 images
+     (900 Kvasir + 550 CVC-ClinicDB). Results are NOT comparable
+     to the released checkpoint, which was trained on the full set.
+TRAINING
+  batchsize 16  trainsize 352  amp True  epochs 100 (loop runs 1..99)
+  lr 0.0001 CONSTANT (no decay; --decay_rate/--decay_epoch are inert)
+  FCT v2: flipped views supervised True, consistency mse x 0.000, vflip True, warmup 300, all scales True, sub full batch, grad_diag 50
+  (consistency OFF: this is the supervised-flips control)
+/home/yassine/projects/Polyp-PVT/lib/pvt.py:164: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  save_model = torch.load(path)
+Train_noaug.py:742: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  'scaler': GradScaler() if opt.amp else None}
+2026-09-28 20:24:02.441515 Epoch [001/100], Step [0020/0081], loss: 3.2316
+2026-09-28 20:24:25.757295 Epoch [001/100], Step [0040/0081], loss: 2.8315
+2026-09-28 20:24:49.172623 Epoch [001/100], Step [0060/0081], loss: 2.2476
+2026-09-28 20:25:12.730656 Epoch [001/100], Step [0080/0081], loss: 1.9579
+2026-09-28 20:25:14.021827 Epoch [001/100], Step [0081/0081], loss: 1.9452
+CVC-300 :  0.6788350000000002
+CVC-ClinicDB :  0.6771112903225806
+Kvasir :  0.75306
+CVC-ColonDB :  0.5723260526315785
+ETIS-LaribPolypDB :  0.513520918367347
+mean:  0.6389706522643012
+############################## best 0.6389706522643012
+Train_noaug.py:413: UserWarning: `nn.functional.upsample` is deprecated. Use `nn.functional.interpolate` instead.
+  images = F.upsample(images, size=(trainsize, trainsize),
+Train_noaug.py:415: UserWarning: `nn.functional.upsample` is deprecated. Use `nn.functional.interpolate` instead.
+  gts = F.upsample(gts, size=(trainsize, trainsize),
+Train_noaug.py:442: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast(enabled=bool(opt.amp)):
+/home/yassine/projects/Polyp-PVT/lib/pvt.py:91: UserWarning: `nn.functional.upsample` is deprecated. Use `nn.functional.interpolate` instead.
+  edge = F.upsample(edge, (x.size()[-2], x.size()[-1]))
+/home/yassine/anaconda3/envs/polyp-pvt/lib/python3.8/site-packages/torch/nn/_reduction.py:42: UserWarning: size_average and reduce args will be deprecated, please use reduction='mean' instead.
+  warnings.warn(warning.format(ret))
+Train_noaug.py:351: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast(enabled=bool(opt.amp)):
+Train_noaug.py:279: UserWarning: `nn.functional.upsample` is deprecated. Use `nn.functional.interpolate` instead.
+  res = F.upsample(res + res1, size=gt.shape, mode='bilinear', align_corners=False)
+2026-09-28 20:26:27.904090 Epoch [002/100], Step [0020/0081], loss: 1.6307
+2026-09-28 20:26:51.604175 Epoch [002/100], Step [0040/0081], loss: 1.5743
+2026-09-28 20:27:15.377821 Epoch [002/100], Step [0060/0081], loss: 1.4677
+2026-09-28 20:27:38.758440 Epoch [002/100], Step [0080/0081], loss: 1.4080
+2026-09-28 20:27:39.753616 Epoch [002/100], Step [0081/0081], loss: 1.4045
+CVC-300 :  0.8644499999999998
+CVC-ClinicDB :  0.8446693548387096
+Kvasir :  0.8719689999999999
+CVC-ColonDB :  0.741386842105264
+ETIS-LaribPolypDB :  0.6765479591836737
+mean:  0.7998046312255294
+############################## best 0.7998046312255294
