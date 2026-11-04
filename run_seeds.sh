@@ -38,11 +38,11 @@
 #      python sweep_summary.py
 #
 #  FCT on the two other models (bash setup_hosts.sh once first), each scored against
-#  its own vanilla on the same seeds, about 85 GPU-hours for six seeds:
-#      ARMS="cascade_vanilla cascade_s3lmup pranetv2_vanilla pranetv2_s3lmup" nohup bash run_seeds.sh 1 2 3 4 5 6 > seeds_hosts.out 2>&1 &
-#  or one model per GPU, for example:
-#      CUDA_VISIBLE_DEVICES=0 ARMS="asgnet_vanilla asgnet_s3lmup" bash run_seeds.sh 1 2 3 4 5 6 2>&1 | tee seeds_asgnet.out
-#      CUDA_VISIBLE_DEVICES=1 ARMS="hgm_vanilla hgm_s3lmup" bash run_seeds.sh 1 2 3 4 5 6 2>&1 | tee seeds_hgm.out
+#  its own vanilla on the same seeds, for example ASGNet with its seeds split over two
+#  GPUs, then all six scored together:
+#      CUDA_VISIBLE_DEVICES=0 ARMS="asgnet_vanilla asgnet_s3lmup" bash run_seeds.sh 1 2 3 2>&1 | tee seeds_asgnet_a.out
+#      CUDA_VISIBLE_DEVICES=1 ARMS="asgnet_vanilla asgnet_s3lmup" bash run_seeds.sh 4 5 6 2>&1 | tee seeds_asgnet_b.out
+#      python seed_summary.py --seeds 1 2 3 4 5 6 --arms ASGNET_VANILLA ASGNET_S3LMUP
 # =============================================================================
 set -u
 SEEDS="${*:-2 3 4 5 6}"
@@ -59,10 +59,8 @@ run_name() {   # run_1288.sh stage -> run name without the seed suffix
 
 vanilla_of() {   # run_1288.sh stage -> the vanilla run it is scored against
   case "$1" in
-    cascade_*)  echo CASCADE_VANILLA ;;
     pranetv2_*) echo PRANETV2_VANILLA ;;
     asgnet_*)   echo ASGNET_VANILLA ;;
-    hgm_*)      echo HGM_VANILLA ;;
     *)          echo PVT_VANILLA ;;
   esac
 }

@@ -7,9 +7,6 @@ host and the vanilla arm keeps each paper's loss.
 
   polyppvt   Polyp-PVT (this repo). Heads P1, P2; prediction P1 + P2; loss: the
              structure loss on each head.
-  cascade    PVT-CASCADE (Rahman and Marculescu, WACV 2023). Heads p1..p4; prediction
-             p1 + p2 + p3 + p4, as in its test_polyp.py; loss: the same structure loss
-             on each head with weight 1, as in its train_polyp.py.
   pranetv2   PraNet-V2 on Res2Net-50 (Hu et al., arXiv 2504.10986). Four foreground and
              four background maps; prediction: the sum of the foreground maps, as in its
              MyTest_med.py; loss: its foreground/background structure loss on each pair,
@@ -19,20 +16,15 @@ host and the vanilla arm keeps each paper's loss.
              loss: its structure, edge-Dice and uncertainty terms; its own data loader
              (with edges and augmentation) and learning-rate schedule, as in its
              Train_PS_R_PVTV3_edge1_new1.py.
-  hgm        HGM, Hybrid Graph Mamba on PVTv2-b2 (Zhu et al., MICCAI 2025). One output
-             map; loss: the structure loss; its x0.1 learning-rate step every 50 epochs,
-             as in its MyTrain.py. Both arms start from ImageNet weights, see HGMHost.
 
-No code from these papers is copied here: CASCADE's licence does not allow it to be
-redistributed, and HGM's repo has no licence. --host_root points at your own clone,
-and the model (and ASGNet's data loader) is imported from it unchanged; setup_hosts.sh
-clones each at the commit this was tested on.
+No code from these papers is copied here: --host_root points at your own clone, and the
+model (and ASGNet's data loader) is imported from it unchanged; setup_hosts.sh clones
+each at the commit this was tested on.
 
   python hosts.py        # build each host and run one forward (on the GPU if there is one)
 """
 import os
 import sys
-import types
 import argparse
 import importlib
 import subprocess
@@ -43,12 +35,9 @@ import torch.nn.functional as F
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _CLASH = ('lib', 'utils')            # package names the hosts share with this repo
-ROOTS = {'cascade': '../CASCADE', 'pranetv2': '../PraNet-V2/binary_seg',
-         'asgnet': '../ASGNet/ASGNet_26_TCSVT', 'hgm': '../HGM'}
-COMMITS = {'cascade': 'd3f050ad6337ef1d8213367eefb5e141bcf2ce75',
-           'pranetv2': 'ca08522ae77cbda6c5056609e7951b502dbb08f2',
-           'asgnet': '97c4e746e94bb6a184a14775b771226eed88c3e2',
-           'hgm': '49ae05afc9785dbbc5a303d39e63588b068e5328'}
+ROOTS = {'pranetv2': '../PraNet-V2/binary_seg', 'asgnet': '../ASGNet/ASGNet_26_TCSVT'}
+COMMITS = {'pranetv2': 'ca08522ae77cbda6c5056609e7951b502dbb08f2',
+           'asgnet': '97c4e746e94bb6a184a14775b771226eed88c3e2'}
 
 
 def _boundary_weight(mask):
@@ -57,7 +46,7 @@ def _boundary_weight(mask):
 
 
 def structure_loss(pred, mask):
-    """Unchanged from the stock repo; PVT-CASCADE's train_polyp.py has the same one.
+    """Unchanged from the stock repo; ASGNet's training script has the same one.
 
     Note the stock `reduce='none'`: `reduce` is the old boolean argument and the
     string counts as true, so the BCE term comes back as a scalar mean and
@@ -148,15 +137,6 @@ def _import_from(root, name):
         importlib.invalidate_caches()
 
 
-def _scipy_misc_stand_in():
-    """PVT-CASCADE's decoders.py imports scipy.misc, which recent SciPy releases
-    dropped, and uses nothing from it; an empty module stands in when it is missing."""
-    try:
-        import scipy.misc  # noqa: F401
-    except ImportError:
-        sys.modules.setdefault('scipy.misc', types.ModuleType('scipy.misc'))
-
-
 def clone_commit(root):
     """The commit checked out in the clone at `root`, or None if git cannot tell."""
     try:
@@ -235,17 +215,6 @@ class PolypPVTHost:
         return '{} from {} at {} ({})'.format(
             self.paper, self.root, (c or 'unknown')[:7],
             'the tested commit' if c == tested else '!! NOT the tested commit ' + tested[:7])
-
-
-class CascadeHost(PolypPVTHost):
-    """PVT-CASCADE: four heads, summed at test time, each trained with the structure loss."""
-    name, paper = 'cascade', 'PVT-CASCADE (Rahman and Marculescu, WACV 2023)'
-    weights = './pretrained_pth/pvt/pvt_v2_b2.pth'  # hard-coded in PVT_CASCADE.__init__
-    module = 'lib/networks.py'
-
-    def build(self):
-        _scipy_misc_stand_in()
-        return _import_from(self.root, 'lib.networks').PVT_CASCADE()   # n_class=1, as in train_polyp.py
 
 
 class PraNetV2Host(PolypPVTHost):
@@ -359,48 +328,7 @@ class ASGNetHost(PolypPVTHost):
                                         '(setup_hosts.sh does)'.format(d, n_edge, n_img))
 
 
-class HGMHost(PolypPVTHost):
-    """HGM (PVTv2-b2 with a hybrid graph-Mamba decoder): one output map, the structure loss.
-
-    Its MyTrain.py runs Polyp-PVT's three-scale loop at 352, batch 16, Adam 3e-5, 200
-    epochs, with the rate x0.1 at epochs 50, 100, 150 and 200, in full precision. HGM()
-    itself leaves the backbone at random weights, and MyTrain.py by default starts from
-    the authors' trained checkpoint (--pre_parameter best_parameter_HGM.pth); here both
-    arms start, like Polyp-PVT, from the ImageNet PVTv2-b2 weights.
-    """
-    name, paper = 'hgm', 'HGM, Hybrid Graph Mamba (Zhu et al., MICCAI 2025)'
-    module = 'lib/pvt.py'
-    lr_note = 'x0.1 at epochs 50, 100, 150 and 200 (its adjust_lr, decay_epoch 50)'
-
-    def build(self):
-        model = _import_from(self.root, 'lib.pvt').HGM()
-        state = torch.load(self.weights, map_location='cpu')   # ImageNet weights, as PolypPVT loads them
-        own = model.backbone.state_dict()
-        own.update({k: v for k, v in state.items() if k in own})
-        model.backbone.load_state_dict(own)
-        return model
-
-    def heads(self, out):
-        return [out]
-
-    def lr_schedule(self, optimizer, opt):
-        def at_epoch(epoch):
-            # its adjust_lr(optimizer, lr, e, 0.1, 50) with e = epoch - 1, since its loop counts from 0
-            if epoch % 50 == 0:
-                for group in optimizer.param_groups:
-                    group['lr'] *= 0.1
-        return at_epoch
-
-    def preflight(self, opt=None):
-        super().preflight(opt)
-        try:
-            import mamba_ssm  # noqa: F401
-        except ImportError as e:
-            raise ImportError('HGM needs mamba_ssm built for your CUDA (pip install mamba-ssm '
-                              '--no-build-isolation; setup_hosts.sh tries it): {}'.format(e))
-
-
-HOSTS = {h.name: h for h in (PolypPVTHost, CascadeHost, PraNetV2Host, ASGNetHost, HGMHost)}
+HOSTS = {h.name: h for h in (PolypPVTHost, PraNetV2Host, ASGNetHost)}
 
 
 def get_host(name='polyppvt', root=None):
@@ -413,12 +341,11 @@ def get_host(name='polyppvt', root=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Build each host and run one forward (on the GPU '
                                                  'if there is one), to check a setup before a long run.')
-    parser.add_argument('--hosts', nargs='+', default=['cascade', 'pranetv2', 'asgnet', 'hgm'],
-                        choices=sorted(HOSTS))
+    parser.add_argument('--hosts', nargs='+', default=['pranetv2', 'asgnet'], choices=sorted(HOSTS))
     for _name, _root in ROOTS.items():
         parser.add_argument('--{}_root'.format(_name), default=_root)
     opt = parser.parse_args()
-    dev = 'cuda' if torch.cuda.is_available() else 'cpu'   # HGM's Mamba kernels need the GPU
+    dev = 'cuda' if torch.cuda.is_available() else 'cpu'
     failed = False
     for name in opt.hosts:
         host = get_host(name, getattr(opt, name + '_root', None))

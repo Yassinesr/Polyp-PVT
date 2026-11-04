@@ -121,9 +121,9 @@ See run_fct_v2.sh for the arms, and flip_gap.py for the equivariance check.
 
 OTHER MODELS (--host)
 ---------------------
-  --host cascade|pranetv2 --host_root <clone> trains PVT-CASCADE or PraNet-V2 in
-  place of Polyp-PVT, with that paper's own loss; everything FCT does is unchanged.
-  See hosts.py, setup_hosts.sh and the cascade_* / pranetv2_* stages of run_1288.sh.
+  --host pranetv2|asgnet --host_root <clone> trains PraNet-V2 or ASGNet in place of
+  Polyp-PVT, with that paper's own loss; everything FCT does is unchanged.
+  See hosts.py, setup_hosts.sh and the pranetv2_* / asgnet_* stages of run_1288.sh.
 """
 import os
 import copy
@@ -685,12 +685,12 @@ if __name__ == '__main__':
                         help='AdamW (weight decay 1e-4, the stock recipe), Adam (no weight '
                              'decay, as in PraNet-V2) or anything else for SGD')
     parser.add_argument('--host', type=str, default='polyppvt', choices=sorted(HOSTS),
-                        help='the model to train: polyppvt (this repo), cascade (PVT-CASCADE) '
-                             'or pranetv2 (PraNet-V2, Res2Net-50), each with its paper\'s loss. '
-                             'See hosts.py')
+                        help='the model to train: polyppvt (this repo), pranetv2 (PraNet-V2, '
+                             'Res2Net-50) or asgnet (ASGNet, PVTv2-b3), each with its paper\'s '
+                             'loss. See hosts.py')
     parser.add_argument('--host_root', type=str, default=None,
-                        help='your clone of the host\'s code (default ../CASCADE or '
-                             '../PraNet-V2/binary_seg; setup_hosts.sh makes them)')
+                        help='your clone of the host\'s code (default ../PraNet-V2/binary_seg '
+                             'or ../ASGNet/ASGNet_26_TCSVT; setup_hosts.sh makes them)')
     parser.add_argument('--batchsize', type=int, default=16)
     parser.add_argument('--trainsize', type=int, default=352)
     parser.add_argument('--clip', type=float, default=0.5)

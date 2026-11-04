@@ -33,10 +33,6 @@
 #  s3lmup_a10    on the views that beat the upright, a = 0.5, 1, 1.5 and 3 (--fct_lm_a).
 #  s3lmup_a15    s3lmup itself is a = 2, the only value that gives every wrong upright
 #  s3lmup_a30    weight 0 and every right one weight > 0. Compare with sweep_summary.py.
-#  cascade_vanilla   PVT-CASCADE (WACV 2023), loaded from your clone (CASCADE_ROOT, default
-#                    ../CASCADE), with its own loss and recipe, which is Polyp-PVT's:
-#                    AdamW 1e-4, batch 16, 100 epochs
-#  cascade_s3lmup    the same with FCT exactly as in s3lmup
 #  pranetv2_vanilla  PraNet-V2 on Res2Net-50, from PRANETV2_ROOT (default
 #                    ../PraNet-V2/binary_seg), with its own loss and recipe: Adam 1e-4,
 #                    batch 8, --epoch 30 (the loop runs 29 epochs, as in its MyTrain_med.py)
@@ -44,15 +40,13 @@
 #  asgnet_vanilla    ASGNet on PVTv2-b3 (TCSVT 2026), from ASGNET_ROOT (default
 #                    ../ASGNet/ASGNet_26_TCSVT), with its own loss, data loader (edges,
 #                    flips, crop, rotation, colour, label noise) and schedule: Adam 1e-4,
-#                    batch 40, one scale, 80 epochs (79 run), full precision
+#                    batch 40, one scale, 80 epochs (79 run), full precision. The batch runs
+#                    as 4 parts of 10 with one step (--accum 4): its 4-GPU DataParallel
+#                    normalised each GPU's 10 images separately, so this keeps both its
+#                    batch-norm batch and its effective batch; ASGNET_ACCUM=8 halves the
+#                    memory again (parts of 5)
 #  asgnet_s3lmup     the same with FCT exactly as in s3lmup
-#  hgm_vanilla       HGM on PVTv2-b2 (MICCAI 2025), from HGM_ROOT (default ../HGM), with its
-#                    own loss and schedule: Adam 3e-5, batch 16, three scales, 200 epochs,
-#                    x0.1 every 50, full precision, from ImageNet weights
-#  hgm_s3lmup        the same with FCT exactly as in s3lmup
-#                    Run setup_hosts.sh once before the host stages. If a paper's batch does
-#                    not fit on one GPU, ASGNET_ACCUM=2 or HGM_ACCUM=2 runs it as two halves
-#                    and steps once (the effective batch is unchanged).
+#                    Run setup_hosts.sh once before the host stages.
 #  gate          inference only: gate_share.py on existing checkpoints
 #
 #  SEED=<n> sets --seed and appends _s<n> to the run name (default: unseeded).
@@ -61,9 +55,8 @@
 #
 #  Usage: bash run_1288.sh vanilla | vanilla_aug | s3f | s3err | s3gate | s3bgate | s3rel | s3sig
 #                          | s3sigy | s3lm | s3lmup | s3lmup_a05 | s3lmup_a10 | s3lmup_a15
-#                          | s3lmup_a30 | cascade_vanilla | cascade_s3lmup | pranetv2_vanilla
-#                          | pranetv2_s3lmup | asgnet_vanilla | asgnet_s3lmup | hgm_vanilla
-#                          | hgm_s3lmup | gate
+#                          | s3lmup_a30 | pranetv2_vanilla | pranetv2_s3lmup | asgnet_vanilla
+#                          | asgnet_s3lmup | gate
 #         SEED=1 bash run_1288.sh s3err
 #         bash run_1288.sh all            # = s3err
 # =============================================================================
@@ -120,29 +113,18 @@ s3lmup_a05()  { train_arm S3LMUP_A05$SFX $FCT --fct_weit 8 --fct_up 1 --fct_lm_a
 s3lmup_a10()  { train_arm S3LMUP_A10$SFX $FCT --fct_weit 8 --fct_up 1 --fct_lm_a 1.0 && infer_arm S3LMUP_A10$SFX PolypPVT; }
 s3lmup_a15()  { train_arm S3LMUP_A15$SFX $FCT --fct_weit 8 --fct_up 1 --fct_lm_a 1.5 && infer_arm S3LMUP_A15$SFX PolypPVT; }
 s3lmup_a30()  { train_arm S3LMUP_A30$SFX $FCT --fct_weit 8 --fct_up 1 --fct_lm_a 3.0 && infer_arm S3LMUP_A30$SFX PolypPVT; }
-CASCADE="--host cascade --host_root ${CASCADE_ROOT:-../CASCADE}"
 PRANETV2="--host pranetv2 --host_root ${PRANETV2_ROOT:-../PraNet-V2/binary_seg}"
 PRANETV2_RECIPE="--optimizer Adam --batchsize 8 --epoch 30"
-cascade_vanilla()  { HOSTARGS="$CASCADE"; train_arm CASCADE_VANILLA$SFX $HOSTARGS --orientation_aug 0 \
-                       && infer_arm CASCADE_VANILLA$SFX PolypPVT; }
-cascade_s3lmup()   { HOSTARGS="$CASCADE"; train_arm CASCADE_S3LMUP$SFX $HOSTARGS $FCT --fct_weit 8 --fct_up 1 \
-                       && infer_arm CASCADE_S3LMUP$SFX PolypPVT; }
 pranetv2_vanilla() { HOSTARGS="$PRANETV2"; train_arm PRANETV2_VANILLA$SFX $HOSTARGS $PRANETV2_RECIPE --orientation_aug 0 \
                        && infer_arm PRANETV2_VANILLA$SFX PolypPVT; }
 pranetv2_s3lmup()  { HOSTARGS="$PRANETV2"; train_arm PRANETV2_S3LMUP$SFX $HOSTARGS $PRANETV2_RECIPE $FCT --fct_weit 8 --fct_up 1 \
                        && infer_arm PRANETV2_S3LMUP$SFX PolypPVT; }
 ASGNET="--host asgnet --host_root ${ASGNET_ROOT:-../ASGNet/ASGNet_26_TCSVT}"
-ASGNET_RECIPE="--optimizer Adam --batchsize 40 --epoch 80 --multiscale 0 --amp 0 --drop_path 0 --accum ${ASGNET_ACCUM:-1}"
-HGM="--host hgm --host_root ${HGM_ROOT:-../HGM}"
-HGM_RECIPE="--optimizer Adam --lr 3e-5 --batchsize 16 --epoch 201 --amp 0 --accum ${HGM_ACCUM:-1}"
+ASGNET_RECIPE="--optimizer Adam --batchsize 40 --epoch 80 --multiscale 0 --amp 0 --drop_path 0 --accum ${ASGNET_ACCUM:-4}"
 asgnet_vanilla()   { HOSTARGS="$ASGNET"; train_arm ASGNET_VANILLA$SFX $HOSTARGS $ASGNET_RECIPE \
                        && infer_arm ASGNET_VANILLA$SFX PolypPVT; }
 asgnet_s3lmup()    { HOSTARGS="$ASGNET"; train_arm ASGNET_S3LMUP$SFX $HOSTARGS $ASGNET_RECIPE $FCT --fct_weit 8 --fct_up 1 \
                        && infer_arm ASGNET_S3LMUP$SFX PolypPVT; }
-hgm_vanilla()      { HOSTARGS="$HGM"; train_arm HGM_VANILLA$SFX $HOSTARGS $HGM_RECIPE --orientation_aug 0 \
-                       && infer_arm HGM_VANILLA$SFX PolypPVT; }
-hgm_s3lmup()       { HOSTARGS="$HGM"; train_arm HGM_S3LMUP$SFX $HOSTARGS $HGM_RECIPE $FCT --fct_weit 8 --fct_up 1 \
-                       && infer_arm HGM_S3LMUP$SFX PolypPVT; }
 gate()        { local ck=""; for a in S3F S3F_EMA S3W05 S3ERR; do [ -d "./model_pth/$a" ] && ck="$ck ./model_pth/$a"; done
                 python gate_share.py --pth_path $ck; }
 
@@ -162,14 +144,10 @@ case "$STAGE" in
   s3lmup_a10)  s3lmup_a10 ;;
   s3lmup_a15)  s3lmup_a15 ;;
   s3lmup_a30)  s3lmup_a30 ;;
-  cascade_vanilla)  cascade_vanilla ;;
-  cascade_s3lmup)   cascade_s3lmup ;;
   pranetv2_vanilla) pranetv2_vanilla ;;
   pranetv2_s3lmup)  pranetv2_s3lmup ;;
   asgnet_vanilla)   asgnet_vanilla ;;
   asgnet_s3lmup)    asgnet_s3lmup ;;
-  hgm_vanilla)      hgm_vanilla ;;
-  hgm_s3lmup)       hgm_s3lmup ;;
   gate)        gate; exit 0 ;;
   all)         s3err ;;
   *)           echo "unknown stage: $STAGE"; exit 1 ;;
