@@ -334,8 +334,39 @@ def evaluate_all(model, test_root):
 
 
 # ---------------------------------------------------------------- train loop
+def _flip_probs(model, images, opt, rng0):
+    """The flipped views' probabilities for --fct_up, flipped back to the upright frame.
+
+    They come from forward passes without gradients, run BEFORE the upright forward:
+    then no autograd graph is alive meanwhile, and FCT's peak memory stays that of
+    one view (run after it, they would sit on top of the whole upright graph). The
+    passes get the same depth mask as the ones that follow (rng0, restored again at
+    the end for the upright forward), and batch-norm running statistics are frozen
+    during them, so they leave no trace in the model.
+    """
+    flips = [_hflip, _vflip] if opt.fct_vflip else [_hflip]
+    n = images.shape[0] if opt.fct_sub <= 0 else min(opt.fct_sub, images.shape[0])
+    bns = [m for m in model.modules() if isinstance(m, torch.nn.modules.batchnorm._BatchNorm)]
+    moms = [m.momentum for m in bns]
+    for m in bns:
+        m.momentum = 0.0
+    probs = []
+    with torch.no_grad():
+        for f in flips:
+            if rng0 is not None:
+                _rng_restore(rng0)
+            with autocast(enabled=bool(opt.amp)):
+                out_k = HOST.heads(model(f(images[:n])))
+            probs.append(torch.sigmoid(HOST.logit([f(h) for h in out_k]).float()))
+    for m, mom in zip(bns, moms):
+        m.momentum = mom
+    if rng0 is not None:
+        _rng_restore(rng0)
+    return probs
+
+
 def _fct_v2_step(model, images, gts, heads, loss, lam, rng0, opt, state,
-                 cons_record, _bw, unit_rate, extra=()):
+                 cons_record, _bw, unit_rate, extra=(), flip_probs=None):
     """One FCT step with the v2 options (seq mode only).
 
     `heads` are the upright view's output maps (P1, P2 for Polyp-PVT) and `loss`
@@ -355,7 +386,8 @@ def _fct_v2_step(model, images, gts, heads, loss, lam, rng0, opt, state,
       * --fct_up 1    the upright view also learns from the flips: where the
                       flipped view closest to the label beats the upright view,
                       the upright logits are pulled toward that flip's detached
-                      probability, with the weight of one flip's term.
+                      probability (`flip_probs`, from _flip_probs before the
+                      upright forward), with the weight of one flip's term.
 
     The upright graph is freed before any flipped forward, so one graph is alive
     at a time, as in the v1 seq mode. Returns the supervised loss averaged over
@@ -384,27 +416,15 @@ def _fct_v2_step(model, images, gts, heads, loss, lam, rng0, opt, state,
         # The upright view learns from the flips. Where the flipped view closest to the
         # label is closer than the upright view, the upright logits are pulled toward that
         # flip's detached probability, so this pull, too, only ever moves toward the label.
-        # The flips' probabilities come from a forward pass without gradients, with the
-        # same depth mask as the passes below; batch-norm running statistics are frozen
-        # during it, so the extra pass leaves no trace in the model.
-        bns = [m for m in model.modules() if isinstance(m, torch.nn.modules.batchnorm._BatchNorm)]
-        moms = [m.momentum for m in bns]
-        for m in bns:
-            m.momentum = 0.0
+        # The flips' probabilities were computed by _flip_probs before the upright forward.
+        if flip_probs is None:
+            flip_probs = _flip_probs(model, images, opt, rng0)
         e_o = (p_o - yb).abs()
         best_e, best_p = e_o, p_o
-        with torch.no_grad():
-            for f in flips:
-                if rng0 is not None:
-                    _rng_restore(rng0)
-                with autocast(enabled=bool(opt.amp)):
-                    out_k = HOST.heads(model(f(images[:n])))
-                p_k = torch.sigmoid(HOST.logit([f(h) for h in out_k]).float())
-                e_k = (p_k - yb).abs()
-                best_p = torch.where(e_k < best_e, p_k, best_p)
-                best_e = torch.minimum(e_k, best_e)
-        for m, mom in zip(bns, moms):
-            m.momentum = mom
+        for p_k in flip_probs:
+            e_k = (p_k - yb).abs()
+            best_p = torch.where(e_k < best_e, p_k, best_p)
+            best_e = torch.minimum(e_k, best_e)
         gate_up = (best_e < e_o).float()
         per_up = F.binary_cross_entropy_with_logits(z_up[:n].float(), best_p, reduction='none')
         up_loss = _wsum_reduce(per_up, gate_up, hw)
@@ -555,6 +575,10 @@ def train(train_loader, model, optimizer, epoch, opt, state):
                 # independent DropPath masks and the consistency term measures that
                 # noise instead of flip non-equivariance.
                 rng0 = _rng_snapshot() if (do_fct and opt.fct_sync_rng) else None
+                # --fct_up's flipped passes without gradients run first, while no graph
+                # is alive, so they add nothing to the peak memory.
+                flip_probs = (_flip_probs(model, images, opt, rng0)
+                              if do_fct and v2 and opt.fct_up and lam > 0 else None)
 
                 def _bw(t, retain=False):
                     """Backward one term, accumulating into .grad."""
@@ -576,7 +600,8 @@ def train(train_loader, model, optimizer, epoch, opt, state):
 
                 if do_fct and v2:
                     loss = _fct_v2_step(model, images, gts, heads, loss, lam, rng0,
-                                        opt, state, cons_record, _bw, rate == 1, extra)
+                                        opt, state, cons_record, _bw, rate == 1, extra,
+                                        flip_probs)
                 elif do_fct and opt.fct_mode == 'seq':
                     p_o = p_o.detach()
                     _bw(loss)                      # frees the supervised graph NOW
