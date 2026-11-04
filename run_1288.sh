@@ -41,10 +41,11 @@
 #                    ../ASGNet/ASGNet_26_TCSVT), with its own loss, data loader (edges,
 #                    flips, crop, rotation, colour, label noise) and schedule: Adam 1e-4,
 #                    batch 40, one scale, 80 epochs (79 run), full precision. The batch runs
-#                    as 4 parts of 10 with one step (--accum 4): its 4-GPU DataParallel
-#                    normalised each GPU's 10 images separately, so this keeps both its
-#                    batch-norm batch and its effective batch; ASGNET_ACCUM=8 halves the
-#                    memory again (parts of 5)
+#                    as 8 parts of 5 with one step (--accum 8), which fits FCT on a 12 GB
+#                    GPU; the short last batch of an epoch runs as fewer parts (8 = 4 + 4).
+#                    ASGNET_ACCUM=4 (parts of 10) matches its 4-GPU DataParallel, where each
+#                    GPU's batch norm saw 10 images, if your GPU fits it. Use one value for
+#                    both arms.
 #  asgnet_s3lmup     the same with FCT exactly as in s3lmup
 #                    Run setup_hosts.sh once before the host stages.
 #  gate          inference only: gate_share.py on existing checkpoints
@@ -120,7 +121,7 @@ pranetv2_vanilla() { HOSTARGS="$PRANETV2"; train_arm PRANETV2_VANILLA$SFX $HOSTA
 pranetv2_s3lmup()  { HOSTARGS="$PRANETV2"; train_arm PRANETV2_S3LMUP$SFX $HOSTARGS $PRANETV2_RECIPE $FCT --fct_weit 8 --fct_up 1 \
                        && infer_arm PRANETV2_S3LMUP$SFX PolypPVT; }
 ASGNET="--host asgnet --host_root ${ASGNET_ROOT:-../ASGNet/ASGNet_26_TCSVT}"
-ASGNET_RECIPE="--optimizer Adam --batchsize 40 --epoch 80 --multiscale 0 --amp 0 --drop_path 0 --accum ${ASGNET_ACCUM:-4}"
+ASGNET_RECIPE="--optimizer Adam --batchsize 40 --epoch 80 --multiscale 0 --amp 0 --drop_path 0 --accum ${ASGNET_ACCUM:-8}"
 asgnet_vanilla()   { HOSTARGS="$ASGNET"; train_arm ASGNET_VANILLA$SFX $HOSTARGS $ASGNET_RECIPE \
                        && infer_arm ASGNET_VANILLA$SFX PolypPVT; }
 asgnet_s3lmup()    { HOSTARGS="$ASGNET"; train_arm ASGNET_S3LMUP$SFX $HOSTARGS $ASGNET_RECIPE $FCT --fct_weit 8 --fct_up 1 \

@@ -258,8 +258,14 @@ def _flat_grad(model):
                       for p in model.parameters()])
 
 
-def _parts(k, images, gts, extra):
-    """The batch as k parts for --accum; with k <= 1, one part: the batch itself."""
+def _parts(k, batchsize, images, gts, extra):
+    """The batch as parts for --accum k; with k <= 1, one part: the batch itself.
+    A full batch runs as k parts. A shorter one (the last batch of an epoch) runs as
+    the fewest parts no bigger than a full batch's, so it fits the same memory without
+    being cut into single images, which batch norm cannot train on."""
+    if k > 1:
+        size = -(-batchsize // k)                  # a full batch's part, rounded up
+        k = min(k, -(-images.shape[0] // size))    # parts this batch needs at that size
     if k <= 1:
         return [(images, gts, extra)]
     split = [t.tensor_split(k) for t in [images, gts] + extra]
@@ -568,7 +574,7 @@ def train(train_loader, model, optimizer, epoch, opt, state):
             # size / batch size), and the optimizer steps once, so the batch-mean losses
             # add up to the whole batch's in a fraction of the memory.
             n_batch, loss_sum = images.shape[0], 0.0
-            for images, gts, extra in _parts(opt.accum, images, gts, extra):
+            for images, gts, extra in _parts(opt.accum, opt.batchsize, images, gts, extra):
                 w_part = images.shape[0] / n_batch
                 # Snapshot the RNG so every view of this sample can be given the
                 # SAME stochastic-depth mask. Without this, f(x) and f(flip x) draw
@@ -850,7 +856,8 @@ if __name__ == '__main__':
     parser.add_argument('--accum', type=int, default=1,
                         help='run each batch as this many parts and step once (gradient '
                              'accumulation), so a paper\'s batch size fits on one GPU; the '
-                             'effective batch stays --batchsize')
+                             'effective batch stays --batchsize. A short last batch runs as '
+                             'fewer parts, none bigger than a full batch\'s')
 
     opt = parser.parse_args()
     if _fct_v2(opt) and opt.fct_mode != 'seq':
