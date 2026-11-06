@@ -457,7 +457,7 @@ def _fct_v2_step(model, images, gts, heads, loss, lam, rng0, opt, state,
             if opt.fct_sup:
                 sup_f = HOST.sup_loss(heads_f, gts[:n], *[e[:n] for e in extra])
         cons_f = None
-        if lam > 0:
+        if lam > 0 and opt.fct_flip_pull:              # --fct_flip_pull 0: no pull on this view
             z_f = HOST.logit(heads_f)
             fix = (gate_o, yb) if opt.fct_weit == 7 else (None, None)
             per, dis = _per_pixel_consistency(z_f, z_o, p_o, opt.fct_loss, *fix)
@@ -796,6 +796,10 @@ if __name__ == '__main__':
                              'upright logits are pulled toward that flip\'s detached probability '
                              '(always toward y), weighted like one flip\'s term (lam / n_flips). '
                              'Costs one forward pass without gradients per flip. FCT v2 only')
+    parser.add_argument('--fct_flip_pull', type=int, default=1, choices=[0, 1],
+                        help='0 = no pull on the flipped views: with --fct_up 1 only the upright '
+                             'pull remains (an ablation of FCT\'s components). The flipped views '
+                             'stay supervised per --fct_sup. Default 1')
     parser.add_argument('--fct_lm_a', type=float, default=2.0,
                         help='lag-or-margin factor a (--fct_weit 8): where a flipped view beats '
                              'the upright, w = max(0, 1 - a|p_o - y|). 2 (default) is the only '
@@ -865,6 +869,8 @@ if __name__ == '__main__':
                      'are implemented for --fct_mode seq only')
     if opt.fct_up and not _fct_v2(opt):
         parser.error('--fct_up needs the FCT v2 path (for example --fct 1 --fct_sup 1)')
+    if not opt.fct_flip_pull and not opt.fct_up:
+        parser.error('--fct_flip_pull 0 needs --fct_up 1 (for no pulls at all, use --fct_weight 0)')
     if opt.fct_lm_a != 2.0 and opt.fct_weit != 8:
         parser.error('--fct_lm_a only applies to the lag-or-margin weight (--fct_weit 8)')
     if opt.fct_lm_a < 0:
@@ -986,6 +992,8 @@ if __name__ == '__main__':
                    8: ' (lag-or-margin, a = {:g})'.format(opt.fct_lm_a)}[opt.fct_weit],
                   bool(opt.fct_vflip), opt.fct_warmup_iters, bool(opt.fct_all_scales),
                   opt.fct_sub or 'full batch', opt.grad_diag or 'off'))
+        print('  FCT pulls: on the flipped views {}, on the upright view (--fct_up) {}'.format(
+            'ON' if opt.fct_flip_pull else 'OFF', 'ON' if opt.fct_up else 'OFF'))
         if opt.fct_weight <= 0:
             print('  (consistency OFF: this is the supervised-flips control)')
         if opt.fct_up:

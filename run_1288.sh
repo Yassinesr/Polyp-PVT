@@ -9,6 +9,8 @@
 #  vanilla       stock Polyp-PVT loss, no FCT, orientation aug off (the stock
 #                default), multi-scale on, same AMP/drop-path as the FCT arms
 #  vanilla_aug   the same with Polyp-PVT's flip/rotation augmentation on
+#  s3            the three views supervised, no pull at all (--fct_weight 0): deterministic
+#                flip augmentation, the first step of the component dissection
 #  s3f           FCT v2 with a constant weight (w = 1), the S3F recipe
 #  s3err         FCT v2 with an error-aware per-pixel weight w = 1 - |p_o - y|:
 #                pixels where the upright prediction is wrong are not used as
@@ -29,6 +31,13 @@
 #  s3lmup        s3lm, and the upright view also learns from the flips: where the flip
 #                closest to the label beats the upright view, the upright is pulled toward
 #                that flip (--fct_up 1). No new setting; about 30% slower per step.
+#  s3fup         FCT without its weight: s3lmup with w = 1 on the flip pulls (--fct_weit 0)
+#  s3relup       FCT without the margin: w = 1 where the flipped view lags, 0 where it leads
+#                (--fct_weit 5, the a -> infinity end of the sweep)
+#  s3up          FCT without the flip pulls: the three views supervised and only the upright
+#                pull (--fct_flip_pull 0)
+#                Component dissection, six seeds each against the same vanilla runs:
+#                  ARMS="s3 s3f s3fup s3relup s3up" nohup bash run_seeds.sh 1 2 3 4 5 6 > seeds_dissect.out 2>&1 &
 #  s3lmup_a05    the sweep of lag-or-margin's factor: s3lmup with w = max(0, 1 - a|p_o - y|)
 #  s3lmup_a10    on the views that beat the upright, a = 0.5, 1, 1.5 and 3 (--fct_lm_a).
 #  s3lmup_a15    s3lmup itself is a = 2, the only value that gives every wrong upright
@@ -54,7 +63,7 @@
 #  pipefail: a training run that crashes or is killed returns non-zero, so its
 #  (partial or stale) checkpoint is not scored.
 #
-#  Usage: bash run_1288.sh vanilla | vanilla_aug | s3f | s3err | s3gate | s3bgate | s3rel | s3sig
+#  Usage: bash run_1288.sh vanilla | vanilla_aug | s3 | s3f | s3fup | s3relup | s3up | s3err | s3gate | s3bgate | s3rel | s3sig
 #                          | s3sigy | s3lm | s3lmup | s3lmup_a05 | s3lmup_a10 | s3lmup_a15
 #                          | s3lmup_a30 | pranetv2_vanilla | pranetv2_s3lmup | asgnet_vanilla
 #                          | asgnet_s3lmup | gate
@@ -101,7 +110,11 @@ FCT="--orientation_aug 0 --fct 1 --fct_sup 1 --fct_all_scales 1 --fct_loss bce -
      --fct_sync_rng 1 --grad_diag 50"
 vanilla()     { train_arm PVT_VANILLA$SFX --orientation_aug 0 && infer_arm PVT_VANILLA$SFX PolypPVT; }
 vanilla_aug() { train_arm PVT_VANILLA_AUG$SFX --orientation_aug 1 && infer_arm PVT_VANILLA_AUG$SFX PolypPVT; }
+s3()          { train_arm S3$SFX $FCT --fct_weight 0 && infer_arm S3$SFX PolypPVT; }
 s3f()         { train_arm S3F$SFX $FCT --fct_weit 0 && infer_arm S3F$SFX PolypPVT; }
+s3fup()       { train_arm S3FUP$SFX $FCT --fct_weit 0 --fct_up 1 && infer_arm S3FUP$SFX PolypPVT; }
+s3relup()     { train_arm S3RELUP$SFX $FCT --fct_weit 5 --fct_up 1 && infer_arm S3RELUP$SFX PolypPVT; }
+s3up()        { train_arm S3UP$SFX $FCT --fct_weit 8 --fct_up 1 --fct_flip_pull 0 && infer_arm S3UP$SFX PolypPVT; }
 s3err()       { train_arm S3ERR$SFX $FCT --fct_weit 2 && infer_arm S3ERR$SFX PolypPVT; }
 s3gate()      { train_arm S3GATE$SFX $FCT --fct_weit 3 && infer_arm S3GATE$SFX PolypPVT; }
 s3bgate()     { train_arm S3BGATE$SFX $FCT --fct_weit 4 && infer_arm S3BGATE$SFX PolypPVT; }
@@ -132,7 +145,11 @@ gate()        { local ck=""; for a in S3F S3F_EMA S3W05 S3ERR; do [ -d "./model_
 case "$STAGE" in
   vanilla)     vanilla ;;
   vanilla_aug) vanilla_aug ;;
+  s3)          s3 ;;
   s3f)         s3f ;;
+  s3fup)       s3fup ;;
+  s3relup)     s3relup ;;
+  s3up)        s3up ;;
   s3err)       s3err ;;
   s3gate)      s3gate ;;
   s3bgate)     s3bgate ;;
