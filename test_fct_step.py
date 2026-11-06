@@ -102,7 +102,43 @@ g_step = [p.grad.clone() for p in model.parameters()]
 r = rel(g_step, grads_reference(model, flip_pull=False, up=False))
 ok &= r < 1e-4
 print('%-42s relative gradient difference %.2e' % ('three supervised views (lambda = 0)', r))
-# the flip pulls must matter when they are on
-r_diff = rel(grads_reference(model), grads_reference(model, flip_pull=False))
-print('sanity: FCT vs upright-pull-only reference differ by %.2e (must be > 0)' % r_diff)
-print('ALL MATCH' if ok and r_diff > 1e-3 else 'MISMATCH')
+# Each pull must actually move the step's own gradient: a gate that silently zeroes a pull would
+# still match a reference with the same bug in neither, so compare the step with itself.
+g_none = g_step                                                             # three views, lambda = 0
+g_fct = grads_from_step(model, opt())                                       # FCT
+g_up = grads_from_step(model, opt(fct_flip_pull=0))                         # upright pull only
+g_flip = grads_from_step(model, opt(fct_up=0))                              # flip pulls only
+moves = [('the upright pull (upright-only vs no pull)', rel(g_up, g_none)),
+         ('the flip pulls (flip-only vs no pull)', rel(g_flip, g_none)),
+         ('the flip pulls on top of the upright pull (FCT vs upright-only)', rel(g_fct, g_up)),
+         ('the upright pull on top of the flip pulls (FCT vs flip-only)', rel(g_fct, g_flip))]
+for name, r_ in moves:
+    print('moves the gradient: %-62s %.2e' % (name, r_))
+    ok &= r_ > 1e-3
+# and the gate's direction, pixel by pixel: on a pixel where the flipped view lags (e_f >= e_o) the
+# lag-or-margin weight is 1; where it leads a wrong upright view it is 0; where it leads a right one
+# it is 1 - 2 e_o. Checked on the weights the step itself computes, through a hook on _wsum_reduce.
+seen = []
+orig = T._wsum_reduce
+def spy(per, w, den):
+    seen.append(w.detach().clone()); return orig(per, w, den)
+T._wsum_reduce = spy
+model.zero_grad(); flip_probs = T._flip_probs(model, x, opt(), None)
+heads = T.HOST.heads(model(x)); loss = T.HOST.sup_loss(heads, gts)
+T._fct_v2_step(model, x, gts, heads, loss, lam, None, opt(), {'iter': 1}, Rec(),
+               lambda t, retain=False: t.backward(retain_graph=retain), True, flip_probs=flip_probs)
+T._wsum_reduce = orig
+with torch.no_grad():
+    y = (gts > 0.5).float(); po = torch.sigmoid(sum(model(x))); eo = (po - y).abs()
+    w_h = seen[1]                       # seen[0] is the upright gate, seen[1] the horizontal flip's weight
+    ph = torch.flip(torch.sigmoid(sum(model(torch.flip(x, [3])))), [3]); eh = (ph - y).abs()
+    lag, lead_wrong, lead_right = eh >= eo, (eh < eo) & (eo > 0.5), (eh < eo) & (eo < 0.5)
+    checks = [('lagging pixels get w = 1', bool(torch.all(w_h[lag] == 1)), int(lag.sum())),
+              ('pixels leading a wrong upright view get w = 0', bool(torch.all(w_h[lead_wrong] == 0)), int(lead_wrong.sum())),
+              ('pixels leading a right upright view get w = 1 - 2 e_o',
+               bool(torch.allclose(w_h[lead_right], 1 - 2 * eo[lead_right], atol=1e-6)), int(lead_right.sum()))]
+for name, good, n in checks:
+    print('gate direction: %-56s %s (%d pixels)' % (name, 'ok' if good and n > 0 else 'FAIL', n))
+    ok &= good and n > 0
+print('ALL MATCH' if ok else 'MISMATCH')
+sys.exit(0 if ok else 1)

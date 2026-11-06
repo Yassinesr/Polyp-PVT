@@ -36,8 +36,8 @@
 #                (--fct_weit 5, the a -> infinity end of the sweep)
 #  s3up          FCT without the flip pulls: the three views supervised and only the upright
 #                pull (--fct_flip_pull 0)
-#                Component dissection, six seeds each against the same vanilla runs:
-#                  ARMS="s3 s3f s3fup s3relup s3up" nohup bash run_seeds.sh 1 2 3 4 5 6 > seeds_dissect.out 2>&1 &
+#                The component dissection runs these in order of what they answer, test first:
+#                  GPU=1 nohup bash run_dissection.sh > dissection.out 2>&1 &
 #  s3lmup_a05    the sweep of lag-or-margin's factor: s3lmup with w = max(0, 1 - a|p_o - y|)
 #  s3lmup_a10    on the views that beat the upright, a = 0.5, 1, 1.5 and 3 (--fct_lm_a).
 #  s3lmup_a15    s3lmup itself is a = 2, the only value that gives every wrong upright
