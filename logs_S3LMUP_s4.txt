@@ -1,0 +1,1152 @@
+AdamW (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    capturable: False
+    differentiable: False
+    eps: 1e-08
+    foreach: None
+    fused: None
+    lr: 0.0001
+    maximize: False
+    weight_decay: 0.0001
+)
+False
+no augmentation
+#################### Start Training (no orientation augmentation) ####################
+AUGMENTATION IN EFFECT
+  orientation (flip/rotate) : OFF
+  photometric               : OFF  (this repo has none)
+  multi-scale [0.75,1,1.25] : ON
+  stochastic depth          : 0.100  (mask shared across views)
+DATA
+  train images on disk       : 1288
+  usable pairs after filter  : 1288
+  !! the standard Polyp-PVT / PraNet split is 1450 images
+     (900 Kvasir + 550 CVC-ClinicDB). Results are NOT comparable
+     to the released checkpoint, which was trained on the full set.
+TRAINING
+  batchsize 16  trainsize 352  amp True  epochs 100 (loop runs 1..99)
+  lr 0.0001 CONSTANT (no decay; --decay_rate/--decay_epoch are inert)
+  FCT v2: flipped views supervised True, consistency bce x 0.500 (lag-or-margin), vflip True, warmup 300, all scales True, sub full batch, grad_diag 50
+  upright view also pulled toward the flip closest to the label where that flip beats it (--fct_up 1)
+  weight EMA: off
+/home/yassine/projects/Polyp-PVT/lib/pvt.py:164: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  save_model = torch.load(path)
+Train_noaug.py:912: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  'scaler': GradScaler() if opt.amp else None,
+2026-10-23 21:23:59.181429 Epoch [001/100], Step [0020/0081], loss: 2.3687, cons_kl: 0.02221, up: 0.6707
+2026-10-23 21:24:28.812252 Epoch [001/100], Step [0040/0081], loss: 2.1019, cons_kl: 0.01107, up: 0.6915
+2026-10-23 21:24:58.851445 Epoch [001/100], Step [0060/0081], loss: 1.7459, cons_kl: 0.01362, |g_cons|/|g_sup|: 0.018, cos: +0.619, up: 0.6970
+2026-10-23 21:25:28.893288 Epoch [001/100], Step [0080/0081], loss: 1.5971, cons_kl: 0.01385, |g_cons|/|g_sup|: 0.018, cos: +0.619, up: 0.6949
+2026-10-23 21:25:30.442200 Epoch [001/100], Step [0081/0081], loss: 1.5901, cons_kl: 0.01391, |g_cons|/|g_sup|: 0.018, cos: +0.619, up: 0.6936
+CVC-300 :  0.8755850000000003
+CVC-ClinicDB :  0.8310129032258067
+Kvasir :  0.8611010000000001
+CVC-ColonDB :  0.7313344736842102
+ETIS-LaribPolypDB :  0.6490908163265305
+mean:  0.7896248386473096
+############################## best 0.7896248386473096
+Train_noaug.py:521: UserWarning: `nn.functional.upsample` is deprecated. Use `nn.functional.interpolate` instead.
+  images = F.upsample(images, size=(trainsize, trainsize),
+Train_noaug.py:523: UserWarning: `nn.functional.upsample` is deprecated. Use `nn.functional.interpolate` instead.
+  gts = F.upsample(gts, size=(trainsize, trainsize),
+Train_noaug.py:550: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast(enabled=bool(opt.amp)):
+/home/yassine/projects/Polyp-PVT/lib/pvt.py:91: UserWarning: `nn.functional.upsample` is deprecated. Use `nn.functional.interpolate` instead.
+  edge = F.upsample(edge, (x.size()[-2], x.size()[-1]))
+/home/yassine/anaconda3/envs/polyp-pvt/lib/python3.8/site-packages/torch/nn/_reduction.py:42: UserWarning: size_average and reduce args will be deprecated, please use reduction='mean' instead.
+  warnings.warn(warning.format(ret))
+Train_noaug.py:432: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast(enabled=bool(opt.amp)):
+Train_noaug.py:405: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with autocast(enabled=bool(opt.amp)):
+Train_noaug.py:314: UserWarning: `nn.functional.upsample` is deprecated. Use `nn.functional.interpolate` instead.
+  res = F.upsample(res + res1, size=gt.shape, mode='bilinear', align_corners=False)
+2026-10-23 21:26:50.329657 Epoch [002/100], Step [0020/0081], loss: 1.4320, cons_kl: 0.01091, |g_cons|/|g_sup|: 0.011, cos: +0.140, up: 0.6907
+2026-10-23 21:27:19.747820 Epoch [002/100], Step [0040/0081], loss: 1.3720, cons_kl: 0.01651, |g_cons|/|g_sup|: 0.011, cos: +0.140, up: 0.6734
+2026-10-23 21:27:49.159062 Epoch [002/100], Step [0060/0081], loss: 1.2814, cons_kl: 0.01739, |g_cons|/|g_sup|: 0.011, cos: +0.140, up: 0.6956
+2026-10-23 21:28:18.564634 Epoch [002/100], Step [0080/0081], loss: 1.2586, cons_kl: 0.02177, |g_cons|/|g_sup|: 0.045, cos: +0.451, up: 0.6776
+2026-10-23 21:28:19.758445 Epoch [002/100], Step [0081/0081], loss: 1.2548, cons_kl: 0.02087, |g_cons|/|g_sup|: 0.045, cos: +0.451, up: 0.6748
+CVC-300 :  0.8719383333333337
+CVC-ClinicDB :  0.867791935483871
+Kvasir :  0.8813549999999998
+CVC-ColonDB :  0.7336260526315788
+ETIS-LaribPolypDB :  0.7026877551020408
+mean:  0.8114798153101648
+############################## best 0.8114798153101648
+2026-10-23 21:29:40.302903 Epoch [003/100], Step [0020/0081], loss: 1.1348, cons_kl: 0.01436, |g_cons|/|g_sup|: 0.045, cos: +0.451, up: 0.6817
+2026-10-23 21:30:09.952568 Epoch [003/100], Step [0040/0081], loss: 1.1409, cons_kl: 0.01963, |g_cons|/|g_sup|: 0.121, cos: +0.419, up: 0.6485
+2026-10-23 21:30:39.507146 Epoch [003/100], Step [0060/0081], loss: 1.1103, cons_kl: 0.02306, |g_cons|/|g_sup|: 0.121, cos: +0.419, up: 0.6351
+2026-10-23 21:31:08.862156 Epoch [003/100], Step [0080/0081], loss: 1.0483, cons_kl: 0.01470, |g_cons|/|g_sup|: 0.121, cos: +0.419, up: 0.6524
+2026-10-23 21:31:10.056377 Epoch [003/100], Step [0081/0081], loss: 1.0484, cons_kl: 0.01479, |g_cons|/|g_sup|: 0.121, cos: +0.419, up: 0.6534
+CVC-300 :  0.8833516666666668
+CVC-ClinicDB :  0.8802145161290323
+Kvasir :  0.8847730000000003
+CVC-ColonDB :  0.7511742105263157
+ETIS-LaribPolypDB :  0.6719040816326535
+mean:  0.8142834949909338
+############################## best 0.8142834949909338
+2026-10-23 21:32:30.591290 Epoch [004/100], Step [0020/0081], loss: 0.9505, cons_kl: 0.00971, |g_cons|/|g_sup|: 0.039, cos: +0.651, up: 0.6441
+2026-10-23 21:33:00.103836 Epoch [004/100], Step [0040/0081], loss: 0.9247, cons_kl: 0.01166, |g_cons|/|g_sup|: 0.039, cos: +0.651, up: 0.6369
+2026-10-23 21:33:29.833405 Epoch [004/100], Step [0060/0081], loss: 0.9177, cons_kl: 0.02036, |g_cons|/|g_sup|: 0.065, cos: +0.140, up: 0.6275
+2026-10-23 21:33:59.299859 Epoch [004/100], Step [0080/0081], loss: 0.9468, cons_kl: 0.02204, |g_cons|/|g_sup|: 0.065, cos: +0.140, up: 0.6649
+2026-10-23 21:34:00.483519 Epoch [004/100], Step [0081/0081], loss: 0.9468, cons_kl: 0.01984, |g_cons|/|g_sup|: 0.065, cos: +0.140, up: 0.6641
+CVC-300 :  0.8690266666666667
+CVC-ClinicDB :  0.8913322580645163
+Kvasir :  0.8988660000000002
+CVC-ColonDB :  0.7527497368421052
+ETIS-LaribPolypDB :  0.7215030612244896
+mean:  0.8266955445595556
+############################## best 0.8266955445595556
+2026-10-23 21:35:20.514226 Epoch [005/100], Step [0020/0081], loss: 0.8241, cons_kl: 0.01411, |g_cons|/|g_sup|: 0.065, cos: +0.140, up: 0.6525
+2026-10-23 21:35:50.091789 Epoch [005/100], Step [0040/0081], loss: 0.8314, cons_kl: 0.01391, |g_cons|/|g_sup|: 0.233, cos: +0.423, up: 0.6364
+2026-10-23 21:36:19.549579 Epoch [005/100], Step [0060/0081], loss: 0.8279, cons_kl: 0.01940, |g_cons|/|g_sup|: 0.233, cos: +0.423, up: 0.6167
+2026-10-23 21:36:48.988038 Epoch [005/100], Step [0080/0081], loss: 0.7892, cons_kl: 0.01324, |g_cons|/|g_sup|: 0.145, cos: +0.452, up: 0.6082
+2026-10-23 21:36:50.175172 Epoch [005/100], Step [0081/0081], loss: 0.7963, cons_kl: 0.01247, |g_cons|/|g_sup|: 0.145, cos: +0.452, up: 0.6195
+CVC-300 :  0.8367566666666667
+CVC-ClinicDB :  0.8843338709677416
+Kvasir :  0.9047479999999999
+CVC-ColonDB :  0.7800186842105259
+ETIS-LaribPolypDB :  0.6751454081632654
+mean:  0.8162005260016398
+2026-10-23 21:38:09.577720 Epoch [006/100], Step [0020/0081], loss: 0.6938, cons_kl: 0.00986, |g_cons|/|g_sup|: 0.145, cos: +0.452, up: 0.6227
+2026-10-23 21:38:38.888995 Epoch [006/100], Step [0040/0081], loss: 0.6725, cons_kl: 0.01102, |g_cons|/|g_sup|: 0.145, cos: +0.452, up: 0.6132
+2026-10-23 21:39:08.417431 Epoch [006/100], Step [0060/0081], loss: 0.6635, cons_kl: 0.01364, |g_cons|/|g_sup|: 0.034, cos: +0.176, up: 0.5799
+2026-10-23 21:39:37.718264 Epoch [006/100], Step [0080/0081], loss: 0.6679, cons_kl: 0.01300, |g_cons|/|g_sup|: 0.034, cos: +0.176, up: 0.6403
+2026-10-23 21:39:38.907550 Epoch [006/100], Step [0081/0081], loss: 0.6683, cons_kl: 0.01315, |g_cons|/|g_sup|: 0.034, cos: +0.176, up: 0.6413
+CVC-300 :  0.8441199999999999
+CVC-ClinicDB :  0.8907129032258063
+Kvasir :  0.9168730000000003
+CVC-ColonDB :  0.7775868421052635
+ETIS-LaribPolypDB :  0.7579959183673467
+mean:  0.8374577327396834
+############################## best 0.8374577327396834
+2026-10-23 21:40:59.036505 Epoch [007/100], Step [0020/0081], loss: 0.5851, cons_kl: 0.01197, |g_cons|/|g_sup|: 0.098, cos: -0.026, up: 0.6095
+2026-10-23 21:41:28.416309 Epoch [007/100], Step [0040/0081], loss: 0.5846, cons_kl: 0.00883, |g_cons|/|g_sup|: 0.098, cos: -0.026, up: 0.6159
+2026-10-23 21:41:57.797236 Epoch [007/100], Step [0060/0081], loss: 0.5638, cons_kl: 0.00854, |g_cons|/|g_sup|: 0.098, cos: -0.026, up: 0.6186
+2026-10-23 21:42:27.195398 Epoch [007/100], Step [0080/0081], loss: 0.5590, cons_kl: 0.01233, |g_cons|/|g_sup|: 0.094, cos: +0.084, up: 0.6098
+2026-10-23 21:42:28.390102 Epoch [007/100], Step [0081/0081], loss: 0.5549, cons_kl: 0.01209, |g_cons|/|g_sup|: 0.094, cos: +0.084, up: 0.6135
+CVC-300 :  0.8796933333333334
+CVC-ClinicDB :  0.910827419354839
+Kvasir :  0.9076799999999998
+CVC-ColonDB :  0.7782192105263158
+ETIS-LaribPolypDB :  0.7699918367346943
+mean:  0.8492823599898365
+############################## best 0.8492823599898365
+2026-10-23 21:43:48.492592 Epoch [008/100], Step [0020/0081], loss: 0.4746, cons_kl: 0.00618, |g_cons|/|g_sup|: 0.094, cos: +0.084, up: 0.5967
+2026-10-23 21:44:18.011004 Epoch [008/100], Step [0040/0081], loss: 0.4791, cons_kl: 0.01079, |g_cons|/|g_sup|: 0.107, cos: +0.541, up: 0.6143
+2026-10-23 21:44:47.511385 Epoch [008/100], Step [0060/0081], loss: 0.4849, cons_kl: 0.01159, |g_cons|/|g_sup|: 0.107, cos: +0.541, up: 0.6154
+2026-10-23 21:45:16.799405 Epoch [008/100], Step [0080/0081], loss: 0.5004, cons_kl: 0.00793, |g_cons|/|g_sup|: 0.107, cos: +0.541, up: 0.6244
+2026-10-23 21:45:17.991012 Epoch [008/100], Step [0081/0081], loss: 0.5024, cons_kl: 0.00779, |g_cons|/|g_sup|: 0.107, cos: +0.541, up: 0.6244
+CVC-300 :  0.8599750000000002
+CVC-ClinicDB :  0.8905629032258066
+Kvasir :  0.9076000000000003
+CVC-ColonDB :  0.7872052631578942
+ETIS-LaribPolypDB :  0.7742178571428581
+mean:  0.8439122047053118
+2026-10-23 21:46:37.290357 Epoch [009/100], Step [0020/0081], loss: 0.4514, cons_kl: 0.00709, |g_cons|/|g_sup|: 0.143, cos: +0.193, up: 0.6208
+2026-10-23 21:47:06.582653 Epoch [009/100], Step [0040/0081], loss: 0.4417, cons_kl: 0.00810, |g_cons|/|g_sup|: 0.143, cos: +0.193, up: 0.6184
+2026-10-23 21:47:36.099267 Epoch [009/100], Step [0060/0081], loss: 0.4278, cons_kl: 0.00815, |g_cons|/|g_sup|: 0.051, cos: +0.829, up: 0.5961
+2026-10-23 21:48:05.330110 Epoch [009/100], Step [0080/0081], loss: 0.4153, cons_kl: 0.00779, |g_cons|/|g_sup|: 0.051, cos: +0.829, up: 0.5911
+2026-10-23 21:48:06.524747 Epoch [009/100], Step [0081/0081], loss: 0.4148, cons_kl: 0.00744, |g_cons|/|g_sup|: 0.051, cos: +0.829, up: 0.5963
+CVC-300 :  0.8553266666666665
+CVC-ClinicDB :  0.9095387096774195
+Kvasir :  0.9206019999999998
+CVC-ColonDB :  0.8142523684210531
+ETIS-LaribPolypDB :  0.7880290816326532
+mean:  0.8575497652795583
+############################## best 0.8575497652795583
+2026-10-23 21:49:26.377919 Epoch [010/100], Step [0020/0081], loss: 0.3856, cons_kl: 0.00788, |g_cons|/|g_sup|: 0.051, cos: +0.829, up: 0.6015
+2026-10-23 21:49:55.795449 Epoch [010/100], Step [0040/0081], loss: 0.3778, cons_kl: 0.00806, |g_cons|/|g_sup|: 0.019, cos: +0.290, up: 0.5826
+2026-10-23 21:50:25.199086 Epoch [010/100], Step [0060/0081], loss: 0.3813, cons_kl: 0.00565, |g_cons|/|g_sup|: 0.019, cos: +0.290, up: 0.6265
+2026-10-23 21:50:54.619667 Epoch [010/100], Step [0080/0081], loss: 0.3807, cons_kl: 0.00730, |g_cons|/|g_sup|: 0.024, cos: +0.577, up: 0.6108
+2026-10-23 21:50:55.811818 Epoch [010/100], Step [0081/0081], loss: 0.3798, cons_kl: 0.00723, |g_cons|/|g_sup|: 0.024, cos: +0.577, up: 0.5969
+CVC-300 :  0.8354350000000001
+CVC-ClinicDB :  0.9036306451612902
+Kvasir :  0.9162580000000001
+CVC-ColonDB :  0.7672760526315787
+ETIS-LaribPolypDB :  0.8060438775510201
+mean:  0.8457287150687778
+2026-10-23 21:52:15.067470 Epoch [011/100], Step [0020/0081], loss: 0.4179, cons_kl: 0.01810, |g_cons|/|g_sup|: 0.024, cos: +0.577, up: 0.6250
+2026-10-23 21:52:44.734879 Epoch [011/100], Step [0040/0081], loss: 0.4154, cons_kl: 0.01492, |g_cons|/|g_sup|: 0.038, cos: +0.444, up: 0.6000
+2026-10-23 21:53:14.154719 Epoch [011/100], Step [0060/0081], loss: 0.4216, cons_kl: 0.02133, |g_cons|/|g_sup|: 0.038, cos: +0.444, up: 0.6173
+2026-10-23 21:53:43.388369 Epoch [011/100], Step [0080/0081], loss: 0.4084, cons_kl: 0.01238, |g_cons|/|g_sup|: 0.038, cos: +0.444, up: 0.6034
+2026-10-23 21:53:44.583225 Epoch [011/100], Step [0081/0081], loss: 0.4061, cons_kl: 0.01264, |g_cons|/|g_sup|: 0.038, cos: +0.444, up: 0.5904
+CVC-300 :  0.8441749999999997
+CVC-ClinicDB :  0.8973645161290322
+Kvasir :  0.9109330000000003
+CVC-ColonDB :  0.782636578947368
+ETIS-LaribPolypDB :  0.7397545918367341
+mean:  0.8349727373826269
+2026-10-23 21:55:03.882081 Epoch [012/100], Step [0020/0081], loss: 0.3632, cons_kl: 0.00971, |g_cons|/|g_sup|: 0.137, cos: +0.663, up: 0.6176
+2026-10-23 21:55:33.230587 Epoch [012/100], Step [0040/0081], loss: 0.3539, cons_kl: 0.00693, |g_cons|/|g_sup|: 0.137, cos: +0.663, up: 0.6400
+2026-10-23 21:56:02.959194 Epoch [012/100], Step [0060/0081], loss: 0.3354, cons_kl: 0.00723, |g_cons|/|g_sup|: 0.124, cos: +0.776, up: 0.6052
+2026-10-23 21:56:32.353030 Epoch [012/100], Step [0080/0081], loss: 0.3214, cons_kl: 0.00487, |g_cons|/|g_sup|: 0.124, cos: +0.776, up: 0.5952
+2026-10-23 21:56:33.556204 Epoch [012/100], Step [0081/0081], loss: 0.3204, cons_kl: 0.00523, |g_cons|/|g_sup|: 0.124, cos: +0.776, up: 0.5821
+CVC-300 :  0.8631733333333333
+CVC-ClinicDB :  0.902840322580645
+Kvasir :  0.9173539999999997
+CVC-ColonDB :  0.7920792105263156
+ETIS-LaribPolypDB :  0.7839438775510207
+mean:  0.851878148798263
+2026-10-23 21:57:52.747823 Epoch [013/100], Step [0020/0081], loss: 0.2981, cons_kl: 0.00533, |g_cons|/|g_sup|: 0.124, cos: +0.776, up: 0.5976
+2026-10-23 21:58:22.142293 Epoch [013/100], Step [0040/0081], loss: 0.2998, cons_kl: 0.00566, |g_cons|/|g_sup|: 0.095, cos: +0.575, up: 0.6042
+2026-10-23 21:58:51.565794 Epoch [013/100], Step [0060/0081], loss: 0.3024, cons_kl: 0.00585, |g_cons|/|g_sup|: 0.095, cos: +0.575, up: 0.5938
+2026-10-23 21:59:20.956237 Epoch [013/100], Step [0080/0081], loss: 0.3041, cons_kl: 0.00591, |g_cons|/|g_sup|: 0.064, cos: +0.139, up: 0.5928
+2026-10-23 21:59:22.149541 Epoch [013/100], Step [0081/0081], loss: 0.3038, cons_kl: 0.00597, |g_cons|/|g_sup|: 0.064, cos: +0.139, up: 0.5999
+CVC-300 :  0.8684699999999997
+CVC-ClinicDB :  0.9014145161290321
+Kvasir :  0.9261260000000001
+CVC-ColonDB :  0.7855123684210529
+ETIS-LaribPolypDB :  0.7912801020408164
+mean:  0.8545605973181802
+2026-10-23 22:00:41.413464 Epoch [014/100], Step [0020/0081], loss: 0.2739, cons_kl: 0.00495, |g_cons|/|g_sup|: 0.064, cos: +0.139, up: 0.5843
+2026-10-23 22:01:10.780828 Epoch [014/100], Step [0040/0081], loss: 0.2802, cons_kl: 0.00612, |g_cons|/|g_sup|: 0.064, cos: +0.139, up: 0.5930
+2026-10-23 22:01:40.485277 Epoch [014/100], Step [0060/0081], loss: 0.2879, cons_kl: 0.00587, |g_cons|/|g_sup|: 0.107, cos: +0.237, up: 0.5875
+2026-10-23 22:02:09.747371 Epoch [014/100], Step [0080/0081], loss: 0.2875, cons_kl: 0.00521, |g_cons|/|g_sup|: 0.107, cos: +0.237, up: 0.6026
+2026-10-23 22:02:10.940059 Epoch [014/100], Step [0081/0081], loss: 0.2858, cons_kl: 0.00513, |g_cons|/|g_sup|: 0.107, cos: +0.237, up: 0.6047
+CVC-300 :  0.8615233333333336
+CVC-ClinicDB :  0.9035145161290323
+Kvasir :  0.9194330000000001
+CVC-ColonDB :  0.7935726315789476
+ETIS-LaribPolypDB :  0.8070035714285722
+mean:  0.8570094104939772
+2026-10-23 22:03:30.831623 Epoch [015/100], Step [0020/0081], loss: 0.2767, cons_kl: 0.00621, |g_cons|/|g_sup|: 0.036, cos: +0.014, up: 0.5964
+2026-10-23 22:04:00.196597 Epoch [015/100], Step [0040/0081], loss: 0.2799, cons_kl: 0.00641, |g_cons|/|g_sup|: 0.036, cos: +0.014, up: 0.5803
+2026-10-23 22:04:29.639358 Epoch [015/100], Step [0060/0081], loss: 0.2827, cons_kl: 0.00702, |g_cons|/|g_sup|: 0.036, cos: +0.014, up: 0.6236
+2026-10-23 22:04:59.065445 Epoch [015/100], Step [0080/0081], loss: 0.2865, cons_kl: 0.01168, |g_cons|/|g_sup|: 0.060, cos: +0.650, up: 0.6143
+2026-10-23 22:05:00.258665 Epoch [015/100], Step [0081/0081], loss: 0.2838, cons_kl: 0.01076, |g_cons|/|g_sup|: 0.060, cos: +0.650, up: 0.6065
+CVC-300 :  0.8533016666666667
+CVC-ClinicDB :  0.9093661290322579
+Kvasir :  0.917791
+CVC-ColonDB :  0.7655642105263165
+ETIS-LaribPolypDB :  0.7493994897959183
+mean:  0.8390844992042318
+2026-10-23 22:06:19.715904 Epoch [016/100], Step [0020/0081], loss: 0.2831, cons_kl: 0.00864, |g_cons|/|g_sup|: 0.060, cos: +0.650, up: 0.5988
+2026-10-23 22:06:49.227240 Epoch [016/100], Step [0040/0081], loss: 0.2761, cons_kl: 0.00633, |g_cons|/|g_sup|: 0.055, cos: +0.838, up: 0.5951
+2026-10-23 22:07:18.723157 Epoch [016/100], Step [0060/0081], loss: 0.2680, cons_kl: 0.00588, |g_cons|/|g_sup|: 0.055, cos: +0.838, up: 0.6094
+2026-10-23 22:07:48.017660 Epoch [016/100], Step [0080/0081], loss: 0.2650, cons_kl: 0.00533, |g_cons|/|g_sup|: 0.055, cos: +0.838, up: 0.5981
+2026-10-23 22:07:49.211688 Epoch [016/100], Step [0081/0081], loss: 0.2650, cons_kl: 0.00521, |g_cons|/|g_sup|: 0.055, cos: +0.838, up: 0.5890
+CVC-300 :  0.8735150000000006
+CVC-ClinicDB :  0.9021225806451612
+Kvasir :  0.925736
+CVC-ColonDB :  0.7891652631578948
+ETIS-LaribPolypDB :  0.7858602040816324
+mean:  0.8552798095769377
+2026-10-23 22:09:08.674618 Epoch [017/100], Step [0020/0081], loss: 0.2824, cons_kl: 0.00994, |g_cons|/|g_sup|: 0.032, cos: +0.828, up: 0.5900
+2026-10-23 22:09:38.033285 Epoch [017/100], Step [0040/0081], loss: 0.2854, cons_kl: 0.01048, |g_cons|/|g_sup|: 0.032, cos: +0.828, up: 0.6052
+2026-10-23 22:10:07.598634 Epoch [017/100], Step [0060/0081], loss: 0.2807, cons_kl: 0.01065, |g_cons|/|g_sup|: 0.035, cos: +0.427, up: 0.5988
+2026-10-23 22:10:37.009635 Epoch [017/100], Step [0080/0081], loss: 0.2737, cons_kl: 0.00798, |g_cons|/|g_sup|: 0.035, cos: +0.427, up: 0.6164
+2026-10-23 22:10:38.203698 Epoch [017/100], Step [0081/0081], loss: 0.2739, cons_kl: 0.00814, |g_cons|/|g_sup|: 0.035, cos: +0.427, up: 0.6106
+CVC-300 :  0.8636333333333334
+CVC-ClinicDB :  0.9333177419354839
+Kvasir :  0.919428
+CVC-ColonDB :  0.7803134210526317
+ETIS-LaribPolypDB :  0.7939545918367352
+mean:  0.858129417631637
+############################## best 0.858129417631637
+2026-10-23 22:11:58.161809 Epoch [018/100], Step [0020/0081], loss: 0.2452, cons_kl: 0.00496, |g_cons|/|g_sup|: 0.035, cos: +0.427, up: 0.6189
+2026-10-23 22:12:27.639340 Epoch [018/100], Step [0040/0081], loss: 0.2491, cons_kl: 0.00545, |g_cons|/|g_sup|: 0.127, cos: +0.445, up: 0.6089
+2026-10-23 22:12:57.051075 Epoch [018/100], Step [0060/0081], loss: 0.2567, cons_kl: 0.00635, |g_cons|/|g_sup|: 0.127, cos: +0.445, up: 0.5855
+2026-10-23 22:13:26.459622 Epoch [018/100], Step [0080/0081], loss: 0.2533, cons_kl: 0.00657, |g_cons|/|g_sup|: 0.048, cos: +0.814, up: 0.6011
+2026-10-23 22:13:27.660560 Epoch [018/100], Step [0081/0081], loss: 0.2537, cons_kl: 0.00616, |g_cons|/|g_sup|: 0.048, cos: +0.814, up: 0.6008
+CVC-300 :  0.8715666666666667
+CVC-ClinicDB :  0.9347999999999997
+Kvasir :  0.9258100000000004
+CVC-ColonDB :  0.7962363157894743
+ETIS-LaribPolypDB :  0.7944704081632651
+mean:  0.8645766781238813
+############################## best 0.8645766781238813
+2026-10-23 22:14:47.446493 Epoch [019/100], Step [0020/0081], loss: 0.2354, cons_kl: 0.00522, |g_cons|/|g_sup|: 0.048, cos: +0.814, up: 0.6043
+2026-10-23 22:15:16.859708 Epoch [019/100], Step [0040/0081], loss: 0.2386, cons_kl: 0.00512, |g_cons|/|g_sup|: 0.048, cos: +0.814, up: 0.5882
+2026-10-23 22:15:46.437627 Epoch [019/100], Step [0060/0081], loss: 0.2474, cons_kl: 0.00808, |g_cons|/|g_sup|: 0.067, cos: +0.302, up: 0.5995
+2026-10-23 22:16:15.706765 Epoch [019/100], Step [0080/0081], loss: 0.2468, cons_kl: 0.00805, |g_cons|/|g_sup|: 0.067, cos: +0.302, up: 0.5917
+2026-10-23 22:16:16.899375 Epoch [019/100], Step [0081/0081], loss: 0.2462, cons_kl: 0.00795, |g_cons|/|g_sup|: 0.067, cos: +0.302, up: 0.6005
+CVC-300 :  0.8475900000000003
+CVC-ClinicDB :  0.911501612903226
+Kvasir :  0.9111050000000002
+CVC-ColonDB :  0.7602986842105265
+ETIS-LaribPolypDB :  0.6925086734693878
+mean:  0.8246007941166281
+2026-10-23 22:17:36.583629 Epoch [020/100], Step [0020/0081], loss: 0.2771, cons_kl: 0.01630, |g_cons|/|g_sup|: 0.128, cos: +0.095, up: 0.5908
+2026-10-23 22:18:05.987836 Epoch [020/100], Step [0040/0081], loss: 0.2667, cons_kl: 0.00764, |g_cons|/|g_sup|: 0.128, cos: +0.095, up: 0.6098
+2026-10-23 22:18:35.495757 Epoch [020/100], Step [0060/0081], loss: 0.2563, cons_kl: 0.00743, |g_cons|/|g_sup|: 0.128, cos: +0.095, up: 0.6069
+2026-10-23 22:19:04.904695 Epoch [020/100], Step [0080/0081], loss: 0.2558, cons_kl: 0.00977, |g_cons|/|g_sup|: 0.130, cos: +0.384, up: 0.5765
+2026-10-23 22:19:06.099801 Epoch [020/100], Step [0081/0081], loss: 0.2547, cons_kl: 0.00975, |g_cons|/|g_sup|: 0.130, cos: +0.384, up: 0.5726
+CVC-300 :  0.84485
+CVC-ClinicDB :  0.9028564516129035
+Kvasir :  0.9233040000000006
+CVC-ColonDB :  0.7900994736842114
+ETIS-LaribPolypDB :  0.7704755102040819
+mean:  0.8463170871002396
+2026-10-23 22:20:25.635144 Epoch [021/100], Step [0020/0081], loss: 0.2333, cons_kl: 0.00633, |g_cons|/|g_sup|: 0.130, cos: +0.384, up: 0.5816
+2026-10-23 22:20:55.133832 Epoch [021/100], Step [0040/0081], loss: 0.2292, cons_kl: 0.00602, |g_cons|/|g_sup|: 0.041, cos: +0.319, up: 0.5958
+2026-10-23 22:21:24.633054 Epoch [021/100], Step [0060/0081], loss: 0.2265, cons_kl: 0.00536, |g_cons|/|g_sup|: 0.041, cos: +0.319, up: 0.5862
+2026-10-23 22:21:54.049232 Epoch [021/100], Step [0080/0081], loss: 0.2297, cons_kl: 0.00587, |g_cons|/|g_sup|: 0.082, cos: +0.811, up: 0.5756
+2026-10-23 22:21:55.249856 Epoch [021/100], Step [0081/0081], loss: 0.2301, cons_kl: 0.00553, |g_cons|/|g_sup|: 0.082, cos: +0.811, up: 0.5814
+CVC-300 :  0.8913683333333332
+CVC-ClinicDB :  0.9338645161290323
+Kvasir :  0.9233469999999997
+CVC-ColonDB :  0.8150423684210525
+ETIS-LaribPolypDB :  0.7982311224489798
+mean:  0.8723706680664793
+############################## best 0.8723706680664793
+2026-10-23 22:23:15.259306 Epoch [022/100], Step [0020/0081], loss: 0.2168, cons_kl: 0.00521, |g_cons|/|g_sup|: 0.082, cos: +0.811, up: 0.5935
+2026-10-23 22:23:44.669288 Epoch [022/100], Step [0040/0081], loss: 0.2170, cons_kl: 0.00507, |g_cons|/|g_sup|: 0.082, cos: +0.811, up: 0.5705
+2026-10-23 22:24:14.306936 Epoch [022/100], Step [0060/0081], loss: 0.2160, cons_kl: 0.00481, |g_cons|/|g_sup|: 0.059, cos: +0.543, up: 0.5831
+2026-10-23 22:24:43.642142 Epoch [022/100], Step [0080/0081], loss: 0.2203, cons_kl: 0.00453, |g_cons|/|g_sup|: 0.059, cos: +0.543, up: 0.6092
+2026-10-23 22:24:44.838359 Epoch [022/100], Step [0081/0081], loss: 0.2223, cons_kl: 0.00440, |g_cons|/|g_sup|: 0.059, cos: +0.543, up: 0.5959
+CVC-300 :  0.8705883333333334
+CVC-ClinicDB :  0.9314741935483867
+Kvasir :  0.9187960000000001
+CVC-ColonDB :  0.806481578947369
+ETIS-LaribPolypDB :  0.7879846938775511
+mean:  0.863064959941328
+2026-10-23 22:26:03.324218 Epoch [023/100], Step [0020/0081], loss: 0.2085, cons_kl: 0.00437, |g_cons|/|g_sup|: 0.069, cos: +0.280, up: 0.6029
+2026-10-23 22:26:32.712271 Epoch [023/100], Step [0040/0081], loss: 0.2118, cons_kl: 0.00483, |g_cons|/|g_sup|: 0.069, cos: +0.280, up: 0.6017
+2026-10-23 22:27:02.147214 Epoch [023/100], Step [0060/0081], loss: 0.2132, cons_kl: 0.00464, |g_cons|/|g_sup|: 0.069, cos: +0.280, up: 0.5829
+2026-10-23 22:27:31.543499 Epoch [023/100], Step [0080/0081], loss: 0.2115, cons_kl: 0.00457, |g_cons|/|g_sup|: 0.048, cos: +0.315, up: 0.5740
+2026-10-23 22:27:32.727496 Epoch [023/100], Step [0081/0081], loss: 0.2125, cons_kl: 0.00453, |g_cons|/|g_sup|: 0.048, cos: +0.315, up: 0.5850
+CVC-300 :  0.8859533333333335
+CVC-ClinicDB :  0.9309612903225805
+Kvasir :  0.927315
+CVC-ColonDB :  0.8064628947368415
+ETIS-LaribPolypDB :  0.8036581632653059
+mean:  0.8708701363316121
+2026-10-23 22:28:52.361652 Epoch [024/100], Step [0020/0081], loss: 0.2085, cons_kl: 0.00446, |g_cons|/|g_sup|: 0.048, cos: +0.315, up: 0.5759
+2026-10-23 22:29:22.030878 Epoch [024/100], Step [0040/0081], loss: 0.2037, cons_kl: 0.00459, |g_cons|/|g_sup|: 0.056, cos: +0.535, up: 0.5812
+2026-10-23 22:29:51.522634 Epoch [024/100], Step [0060/0081], loss: 0.2025, cons_kl: 0.00481, |g_cons|/|g_sup|: 0.056, cos: +0.535, up: 0.5770
+2026-10-23 22:30:20.846112 Epoch [024/100], Step [0080/0081], loss: 0.2058, cons_kl: 0.00681, |g_cons|/|g_sup|: 0.056, cos: +0.535, up: 0.5830
+2026-10-23 22:30:22.029843 Epoch [024/100], Step [0081/0081], loss: 0.2074, cons_kl: 0.00804, |g_cons|/|g_sup|: 0.056, cos: +0.535, up: 0.5856
+CVC-300 :  0.8919333333333335
+CVC-ClinicDB :  0.921424193548387
+Kvasir :  0.9180360000000001
+CVC-ColonDB :  0.8101578947368424
+ETIS-LaribPolypDB :  0.8020357142857145
+mean:  0.8687174271808553
+2026-10-23 22:31:41.577149 Epoch [025/100], Step [0020/0081], loss: 0.2383, cons_kl: 0.01035, |g_cons|/|g_sup|: 0.086, cos: +0.575, up: 0.5995
+2026-10-23 22:32:10.952336 Epoch [025/100], Step [0040/0081], loss: 0.2335, cons_kl: 0.00689, |g_cons|/|g_sup|: 0.086, cos: +0.575, up: 0.6097
+2026-10-23 22:32:40.528186 Epoch [025/100], Step [0060/0081], loss: 0.2208, cons_kl: 0.00826, |g_cons|/|g_sup|: 0.113, cos: +0.043, up: 0.5913
+2026-10-23 22:33:09.770810 Epoch [025/100], Step [0080/0081], loss: 0.2109, cons_kl: 0.00636, |g_cons|/|g_sup|: 0.113, cos: +0.043, up: 0.5898
+2026-10-23 22:33:10.966231 Epoch [025/100], Step [0081/0081], loss: 0.2104, cons_kl: 0.00620, |g_cons|/|g_sup|: 0.113, cos: +0.043, up: 0.5864
+CVC-300 :  0.8678550000000003
+CVC-ClinicDB :  0.9204596774193547
+Kvasir :  0.917391
+CVC-ColonDB :  0.8017178947368429
+ETIS-LaribPolypDB :  0.7553107142857144
+mean:  0.8525468572883824
+2026-10-23 22:34:30.211405 Epoch [026/100], Step [0020/0081], loss: 0.1986, cons_kl: 0.00489, |g_cons|/|g_sup|: 0.113, cos: +0.043, up: 0.5959
+2026-10-23 22:34:59.650178 Epoch [026/100], Step [0040/0081], loss: 0.1977, cons_kl: 0.00489, |g_cons|/|g_sup|: 0.048, cos: +0.510, up: 0.5870
+2026-10-23 22:35:29.045819 Epoch [026/100], Step [0060/0081], loss: 0.2011, cons_kl: 0.00539, |g_cons|/|g_sup|: 0.048, cos: +0.510, up: 0.5929
+2026-10-23 22:35:58.458649 Epoch [026/100], Step [0080/0081], loss: 0.2042, cons_kl: 0.00663, |g_cons|/|g_sup|: 0.073, cos: +0.821, up: 0.5995
+2026-10-23 22:35:59.642456 Epoch [026/100], Step [0081/0081], loss: 0.2031, cons_kl: 0.00652, |g_cons|/|g_sup|: 0.073, cos: +0.821, up: 0.5918
+CVC-300 :  0.8634116666666667
+CVC-ClinicDB :  0.9405951612903226
+Kvasir :  0.9185039999999998
+CVC-ColonDB :  0.7979650000000005
+ETIS-LaribPolypDB :  0.7846801020408164
+mean:  0.8610311859995612
+2026-10-23 22:37:19.006258 Epoch [027/100], Step [0020/0081], loss: 0.1925, cons_kl: 0.00456, |g_cons|/|g_sup|: 0.073, cos: +0.821, up: 0.5748
+2026-10-23 22:37:48.243782 Epoch [027/100], Step [0040/0081], loss: 0.1904, cons_kl: 0.00413, |g_cons|/|g_sup|: 0.073, cos: +0.821, up: 0.5998
+2026-10-23 22:38:17.786354 Epoch [027/100], Step [0060/0081], loss: 0.1894, cons_kl: 0.00441, |g_cons|/|g_sup|: 0.141, cos: +0.451, up: 0.6009
+2026-10-23 22:38:47.146310 Epoch [027/100], Step [0080/0081], loss: 0.1936, cons_kl: 0.00501, |g_cons|/|g_sup|: 0.141, cos: +0.451, up: 0.5777
+2026-10-23 22:38:48.340028 Epoch [027/100], Step [0081/0081], loss: 0.1942, cons_kl: 0.00497, |g_cons|/|g_sup|: 0.141, cos: +0.451, up: 0.5912
+CVC-300 :  0.8739233333333335
+CVC-ClinicDB :  0.9272709677419355
+Kvasir :  0.9219340000000004
+CVC-ColonDB :  0.7960807894736843
+ETIS-LaribPolypDB :  0.7826387755102041
+mean:  0.8603695732118315
+2026-10-23 22:40:07.814132 Epoch [028/100], Step [0020/0081], loss: 0.1889, cons_kl: 0.00493, |g_cons|/|g_sup|: 0.043, cos: +0.590, up: 0.5908
+2026-10-23 22:40:37.206405 Epoch [028/100], Step [0040/0081], loss: 0.1867, cons_kl: 0.00454, |g_cons|/|g_sup|: 0.043, cos: +0.590, up: 0.5821
+2026-10-23 22:41:06.619046 Epoch [028/100], Step [0060/0081], loss: 0.1861, cons_kl: 0.00445, |g_cons|/|g_sup|: 0.043, cos: +0.590, up: 0.5766
+2026-10-23 22:41:35.969742 Epoch [028/100], Step [0080/0081], loss: 0.1888, cons_kl: 0.00413, |g_cons|/|g_sup|: 0.082, cos: +0.524, up: 0.5921
+2026-10-23 22:41:37.162569 Epoch [028/100], Step [0081/0081], loss: 0.1880, cons_kl: 0.00408, |g_cons|/|g_sup|: 0.082, cos: +0.524, up: 0.5950
+CVC-300 :  0.8805466666666665
+CVC-ClinicDB :  0.9319499999999998
+Kvasir :  0.9173199999999997
+CVC-ColonDB :  0.8059768421052644
+ETIS-LaribPolypDB :  0.77899387755102
+mean:  0.86295747726459
+2026-10-23 22:42:56.456645 Epoch [029/100], Step [0020/0081], loss: 0.1770, cons_kl: 0.00453, |g_cons|/|g_sup|: 0.082, cos: +0.524, up: 0.5848
+2026-10-23 22:43:25.886293 Epoch [029/100], Step [0040/0081], loss: 0.1785, cons_kl: 0.00413, |g_cons|/|g_sup|: 0.055, cos: +0.540, up: 0.5796
+2026-10-23 22:43:55.430158 Epoch [029/100], Step [0060/0081], loss: 0.1831, cons_kl: 0.00450, |g_cons|/|g_sup|: 0.055, cos: +0.540, up: 0.5789
+2026-10-23 22:44:24.749775 Epoch [029/100], Step [0080/0081], loss: 0.1820, cons_kl: 0.00381, |g_cons|/|g_sup|: 0.055, cos: +0.540, up: 0.5999
+2026-10-23 22:44:25.947588 Epoch [029/100], Step [0081/0081], loss: 0.1814, cons_kl: 0.00366, |g_cons|/|g_sup|: 0.055, cos: +0.540, up: 0.6041
+CVC-300 :  0.8790700000000004
+CVC-ClinicDB :  0.9354967741935485
+Kvasir :  0.9149690000000001
+CVC-ColonDB :  0.7981107894736841
+ETIS-LaribPolypDB :  0.7801331632653065
+mean:  0.861555945386508
+2026-10-23 22:45:45.332480 Epoch [030/100], Step [0020/0081], loss: 0.1785, cons_kl: 0.00537, |g_cons|/|g_sup|: 0.093, cos: +0.626, up: 0.5831
+2026-10-23 22:46:14.709128 Epoch [030/100], Step [0040/0081], loss: 0.1826, cons_kl: 0.00593, |g_cons|/|g_sup|: 0.093, cos: +0.626, up: 0.5993
+2026-10-23 22:46:44.272394 Epoch [030/100], Step [0060/0081], loss: 0.1880, cons_kl: 0.00775, |g_cons|/|g_sup|: 0.184, cos: +0.881, up: 0.6091
+2026-10-23 22:47:13.607825 Epoch [030/100], Step [0080/0081], loss: 0.2417, cons_kl: 0.04068, |g_cons|/|g_sup|: 0.184, cos: +0.881, up: 0.5986
+2026-10-23 22:47:14.812507 Epoch [030/100], Step [0081/0081], loss: 0.2440, cons_kl: 0.03909, |g_cons|/|g_sup|: 0.184, cos: +0.881, up: 0.5998
+CVC-300 :  0.8144516666666669
+CVC-ClinicDB :  0.8737338709677417
+Kvasir :  0.911474
+CVC-ColonDB :  0.7492302631578941
+ETIS-LaribPolypDB :  0.7521112244897958
+mean:  0.8202002050564197
+2026-10-23 22:48:34.490345 Epoch [031/100], Step [0020/0081], loss: 0.2774, cons_kl: 0.01411, |g_cons|/|g_sup|: 0.014, cos: +0.079, up: 0.6017
+2026-10-23 22:49:03.926568 Epoch [031/100], Step [0040/0081], loss: 0.2542, cons_kl: 0.01303, |g_cons|/|g_sup|: 0.014, cos: +0.079, up: 0.5999
+2026-10-23 22:49:33.324943 Epoch [031/100], Step [0060/0081], loss: 0.2217, cons_kl: 0.00676, |g_cons|/|g_sup|: 0.014, cos: +0.079, up: 0.5809
+2026-10-23 22:50:02.737410 Epoch [031/100], Step [0080/0081], loss: 0.2103, cons_kl: 0.00641, |g_cons|/|g_sup|: 0.046, cos: +0.405, up: 0.5869
+2026-10-23 22:50:03.942561 Epoch [031/100], Step [0081/0081], loss: 0.2079, cons_kl: 0.00624, |g_cons|/|g_sup|: 0.046, cos: +0.405, up: 0.5875
+CVC-300 :  0.8565750000000002
+CVC-ClinicDB :  0.923941935483871
+Kvasir :  0.9111340000000001
+CVC-ColonDB :  0.8050094736842113
+ETIS-LaribPolypDB :  0.8017489795918364
+mean:  0.8596818777519839
+2026-10-23 22:51:23.729573 Epoch [032/100], Step [0020/0081], loss: 0.1850, cons_kl: 0.00530, |g_cons|/|g_sup|: 0.046, cos: +0.405, up: 0.6109
+2026-10-23 22:51:53.386833 Epoch [032/100], Step [0040/0081], loss: 0.1847, cons_kl: 0.00497, |g_cons|/|g_sup|: 0.076, cos: +0.585, up: 0.5876
+2026-10-23 22:52:22.949177 Epoch [032/100], Step [0060/0081], loss: 0.1837, cons_kl: 0.00530, |g_cons|/|g_sup|: 0.076, cos: +0.585, up: 0.5684
+2026-10-23 22:52:52.329085 Epoch [032/100], Step [0080/0081], loss: 0.1794, cons_kl: 0.00415, |g_cons|/|g_sup|: 0.076, cos: +0.585, up: 0.5926
+2026-10-23 22:52:53.524348 Epoch [032/100], Step [0081/0081], loss: 0.1797, cons_kl: 0.00410, |g_cons|/|g_sup|: 0.076, cos: +0.585, up: 0.5872
+CVC-300 :  0.8743299999999999
+CVC-ClinicDB :  0.9395290322580645
+Kvasir :  0.9152409999999997
+CVC-ColonDB :  0.8106836842105263
+ETIS-LaribPolypDB :  0.7943760204081631
+mean:  0.8668319473753507
+2026-10-23 22:54:13.070396 Epoch [033/100], Step [0020/0081], loss: 0.1687, cons_kl: 0.00436, |g_cons|/|g_sup|: 0.056, cos: +0.708, up: 0.5855
+2026-10-23 22:54:42.550235 Epoch [033/100], Step [0040/0081], loss: 0.1709, cons_kl: 0.00483, |g_cons|/|g_sup|: 0.056, cos: +0.708, up: 0.5868
+2026-10-23 22:55:12.149362 Epoch [033/100], Step [0060/0081], loss: 0.1709, cons_kl: 0.00420, |g_cons|/|g_sup|: 0.067, cos: +0.473, up: 0.5925
+2026-10-23 22:55:41.424312 Epoch [033/100], Step [0080/0081], loss: 0.1710, cons_kl: 0.00443, |g_cons|/|g_sup|: 0.067, cos: +0.473, up: 0.5737
+2026-10-23 22:55:42.621619 Epoch [033/100], Step [0081/0081], loss: 0.1710, cons_kl: 0.00445, |g_cons|/|g_sup|: 0.067, cos: +0.473, up: 0.5695
+CVC-300 :  0.869275
+CVC-ClinicDB :  0.9413048387096775
+Kvasir :  0.9163429999999998
+CVC-ColonDB :  0.8042347368421051
+ETIS-LaribPolypDB :  0.791178571428571
+mean:  0.8644672293960707
+2026-10-23 22:57:04.799481 Epoch [034/100], Step [0020/0081], loss: 0.1642, cons_kl: 0.00377, |g_cons|/|g_sup|: 0.067, cos: +0.473, up: 0.5857
+2026-10-23 22:57:36.791677 Epoch [034/100], Step [0040/0081], loss: 0.1647, cons_kl: 0.00425, |g_cons|/|g_sup|: 0.076, cos: +0.503, up: 0.5728
+2026-10-23 22:58:08.486343 Epoch [034/100], Step [0060/0081], loss: 0.1637, cons_kl: 0.00381, |g_cons|/|g_sup|: 0.076, cos: +0.503, up: 0.5760
+2026-10-23 22:58:40.195297 Epoch [034/100], Step [0080/0081], loss: 0.1626, cons_kl: 0.00396, |g_cons|/|g_sup|: 0.071, cos: +0.601, up: 0.5705
+2026-10-23 22:58:41.563312 Epoch [034/100], Step [0081/0081], loss: 0.1623, cons_kl: 0.00389, |g_cons|/|g_sup|: 0.071, cos: +0.601, up: 0.5759
+CVC-300 :  0.8676833333333331
+CVC-ClinicDB :  0.9422145161290322
+Kvasir :  0.915186
+CVC-ColonDB :  0.8037984210526311
+ETIS-LaribPolypDB :  0.7879326530612243
+mean:  0.8633629847152442
+2026-10-23 23:00:04.063003 Epoch [035/100], Step [0020/0081], loss: 0.1601, cons_kl: 0.00375, |g_cons|/|g_sup|: 0.071, cos: +0.601, up: 0.5763
+2026-10-23 23:00:35.699812 Epoch [035/100], Step [0040/0081], loss: 0.1598, cons_kl: 0.00390, |g_cons|/|g_sup|: 0.071, cos: +0.601, up: 0.5754
+2026-10-23 23:01:07.502849 Epoch [035/100], Step [0060/0081], loss: 0.1646, cons_kl: 0.00918, |g_cons|/|g_sup|: 0.061, cos: +0.447, up: 0.5854
+2026-10-23 23:01:39.067781 Epoch [035/100], Step [0080/0081], loss: 0.1716, cons_kl: 0.00487, |g_cons|/|g_sup|: 0.061, cos: +0.447, up: 0.5960
+2026-10-23 23:01:40.423679 Epoch [035/100], Step [0081/0081], loss: 0.1719, cons_kl: 0.00490, |g_cons|/|g_sup|: 0.061, cos: +0.447, up: 0.5960
+CVC-300 :  0.865635
+CVC-ClinicDB :  0.9398258064516133
+Kvasir :  0.9117650000000002
+CVC-ColonDB :  0.8054955263157889
+ETIS-LaribPolypDB :  0.7775428571428572
+mean:  0.8600528379820519
+2026-10-23 23:03:02.354360 Epoch [036/100], Step [0020/0081], loss: 0.1599, cons_kl: 0.00429, |g_cons|/|g_sup|: 0.066, cos: +0.519, up: 0.5994
+2026-10-23 23:03:33.950782 Epoch [036/100], Step [0040/0081], loss: 0.1599, cons_kl: 0.00397, |g_cons|/|g_sup|: 0.066, cos: +0.519, up: 0.5796
+2026-10-23 23:04:05.658134 Epoch [036/100], Step [0060/0081], loss: 0.1626, cons_kl: 0.00500, |g_cons|/|g_sup|: 0.066, cos: +0.519, up: 0.5794
+2026-10-23 23:04:37.391250 Epoch [036/100], Step [0080/0081], loss: 0.1696, cons_kl: 0.00487, |g_cons|/|g_sup|: 0.045, cos: +0.684, up: 0.5793
+2026-10-23 23:04:38.748401 Epoch [036/100], Step [0081/0081], loss: 0.1694, cons_kl: 0.00498, |g_cons|/|g_sup|: 0.045, cos: +0.684, up: 0.5789
+CVC-300 :  0.8786199999999997
+CVC-ClinicDB :  0.9448838709677418
+Kvasir :  0.9070169999999999
+CVC-ColonDB :  0.8071265789473682
+ETIS-LaribPolypDB :  0.7901637755102048
+mean:  0.8655622450850629
+2026-10-23 23:06:01.238496 Epoch [037/100], Step [0020/0081], loss: 0.1607, cons_kl: 0.00418, |g_cons|/|g_sup|: 0.045, cos: +0.684, up: 0.5864
+2026-10-23 23:06:33.051328 Epoch [037/100], Step [0040/0081], loss: 0.1622, cons_kl: 0.00510, |g_cons|/|g_sup|: 0.332, cos: +0.727, up: 0.5691
+2026-10-23 23:07:04.820692 Epoch [037/100], Step [0060/0081], loss: 0.1683, cons_kl: 0.00891, |g_cons|/|g_sup|: 0.332, cos: +0.727, up: 0.5841
+2026-10-23 23:07:36.392051 Epoch [037/100], Step [0080/0081], loss: 0.1775, cons_kl: 0.00562, |g_cons|/|g_sup|: 0.332, cos: +0.727, up: 0.5957
+2026-10-23 23:07:37.637724 Epoch [037/100], Step [0081/0081], loss: 0.1782, cons_kl: 0.00538, |g_cons|/|g_sup|: 0.332, cos: +0.727, up: 0.5963
+CVC-300 :  0.8709399999999998
+CVC-ClinicDB :  0.9165758064516127
+Kvasir :  0.8993459999999994
+CVC-ColonDB :  0.7969705263157897
+ETIS-LaribPolypDB :  0.7793821428571426
+mean:  0.8526428951249088
+2026-10-23 23:08:58.228353 Epoch [038/100], Step [0020/0081], loss: 0.1681, cons_kl: 0.00511, |g_cons|/|g_sup|: 0.054, cos: +0.543, up: 0.5781
+2026-10-23 23:09:28.219869 Epoch [038/100], Step [0040/0081], loss: 0.1685, cons_kl: 0.00495, |g_cons|/|g_sup|: 0.054, cos: +0.543, up: 0.5772
+2026-10-23 23:09:58.529800 Epoch [038/100], Step [0060/0081], loss: 0.1648, cons_kl: 0.00449, |g_cons|/|g_sup|: 0.102, cos: +0.411, up: 0.5670
+2026-10-23 23:10:28.468814 Epoch [038/100], Step [0080/0081], loss: 0.1605, cons_kl: 0.00431, |g_cons|/|g_sup|: 0.102, cos: +0.411, up: 0.5732
+2026-10-23 23:10:29.703985 Epoch [038/100], Step [0081/0081], loss: 0.1599, cons_kl: 0.00433, |g_cons|/|g_sup|: 0.102, cos: +0.411, up: 0.5794
+CVC-300 :  0.85454
+CVC-ClinicDB :  0.9311145161290322
+Kvasir :  0.9128610000000004
+CVC-ColonDB :  0.7935410526315796
+ETIS-LaribPolypDB :  0.7903285714285719
+mean:  0.8564770280378367
+2026-10-23 23:11:51.051121 Epoch [039/100], Step [0020/0081], loss: 0.1597, cons_kl: 0.00622, |g_cons|/|g_sup|: 0.102, cos: +0.411, up: 0.5710
+2026-10-23 23:12:22.778403 Epoch [039/100], Step [0040/0081], loss: 0.1598, cons_kl: 0.00477, |g_cons|/|g_sup|: 0.072, cos: +0.573, up: 0.5701
+2026-10-23 23:12:54.409828 Epoch [039/100], Step [0060/0081], loss: 0.1560, cons_kl: 0.00448, |g_cons|/|g_sup|: 0.072, cos: +0.573, up: 0.5725
+2026-10-23 23:13:26.173399 Epoch [039/100], Step [0080/0081], loss: 0.1558, cons_kl: 0.00417, |g_cons|/|g_sup|: 0.068, cos: +0.506, up: 0.5840
+2026-10-23 23:13:27.529458 Epoch [039/100], Step [0081/0081], loss: 0.1554, cons_kl: 0.00425, |g_cons|/|g_sup|: 0.068, cos: +0.506, up: 0.5847
+CVC-300 :  0.8580183333333335
+CVC-ClinicDB :  0.9308903225806454
+Kvasir :  0.9114519999999997
+CVC-ColonDB :  0.807418421052632
+ETIS-LaribPolypDB :  0.7900520408163265
+mean:  0.8595662235565875
+2026-10-23 23:14:49.110355 Epoch [040/100], Step [0020/0081], loss: 0.1506, cons_kl: 0.00401, |g_cons|/|g_sup|: 0.068, cos: +0.506, up: 0.5732
+2026-10-23 23:15:20.674036 Epoch [040/100], Step [0040/0081], loss: 0.1516, cons_kl: 0.00416, |g_cons|/|g_sup|: 0.068, cos: +0.506, up: 0.5694
+2026-10-23 23:15:52.480968 Epoch [040/100], Step [0060/0081], loss: 0.1505, cons_kl: 0.00385, |g_cons|/|g_sup|: 0.060, cos: +0.458, up: 0.5710
+2026-10-23 23:16:24.160919 Epoch [040/100], Step [0080/0081], loss: 0.1489, cons_kl: 0.00406, |g_cons|/|g_sup|: 0.060, cos: +0.458, up: 0.5755
+2026-10-23 23:16:25.506514 Epoch [040/100], Step [0081/0081], loss: 0.1492, cons_kl: 0.00408, |g_cons|/|g_sup|: 0.060, cos: +0.458, up: 0.5743
+CVC-300 :  0.8670583333333334
+CVC-ClinicDB :  0.9338790322580647
+Kvasir :  0.9169389999999998
+CVC-ColonDB :  0.8050373684210527
+ETIS-LaribPolypDB :  0.7991994897959187
+mean:  0.8644226447616739
+2026-10-23 23:17:47.219244 Epoch [041/100], Step [0020/0081], loss: 0.1497, cons_kl: 0.00622, |g_cons|/|g_sup|: 0.101, cos: +0.643, up: 0.5675
+2026-10-23 23:18:18.734391 Epoch [041/100], Step [0040/0081], loss: 0.1529, cons_kl: 0.00425, |g_cons|/|g_sup|: 0.101, cos: +0.643, up: 0.5710
+2026-10-23 23:18:50.488430 Epoch [041/100], Step [0060/0081], loss: 0.1530, cons_kl: 0.00419, |g_cons|/|g_sup|: 0.044, cos: +0.468, up: 0.5624
+2026-10-23 23:19:21.990741 Epoch [041/100], Step [0080/0081], loss: 0.1501, cons_kl: 0.00419, |g_cons|/|g_sup|: 0.044, cos: +0.468, up: 0.5767
+2026-10-23 23:19:23.326520 Epoch [041/100], Step [0081/0081], loss: 0.1498, cons_kl: 0.00417, |g_cons|/|g_sup|: 0.044, cos: +0.468, up: 0.5859
+CVC-300 :  0.87876
+CVC-ClinicDB :  0.9342677419354841
+Kvasir :  0.9148140000000001
+CVC-ColonDB :  0.8150142105263155
+ETIS-LaribPolypDB :  0.7887158163265306
+mean:  0.8663143537576662
+2026-10-23 23:20:44.836676 Epoch [042/100], Step [0020/0081], loss: 0.1438, cons_kl: 0.00424, |g_cons|/|g_sup|: 0.044, cos: +0.468, up: 0.5997
+2026-10-23 23:21:16.632952 Epoch [042/100], Step [0040/0081], loss: 0.1462, cons_kl: 0.00426, |g_cons|/|g_sup|: 0.093, cos: +0.467, up: 0.5701
+2026-10-23 23:21:48.289486 Epoch [042/100], Step [0060/0081], loss: 0.1453, cons_kl: 0.00408, |g_cons|/|g_sup|: 0.093, cos: +0.467, up: 0.5689
+2026-10-23 23:22:20.156559 Epoch [042/100], Step [0080/0081], loss: 0.1441, cons_kl: 0.00432, |g_cons|/|g_sup|: 0.043, cos: +0.571, up: 0.5800
+2026-10-23 23:22:21.521735 Epoch [042/100], Step [0081/0081], loss: 0.1439, cons_kl: 0.00414, |g_cons|/|g_sup|: 0.043, cos: +0.571, up: 0.5723
+CVC-300 :  0.8650883333333332
+CVC-ClinicDB :  0.9299354838709681
+Kvasir :  0.9137140000000001
+CVC-ColonDB :  0.7991192105263155
+ETIS-LaribPolypDB :  0.7842260204081627
+mean:  0.858416609627756
+2026-10-23 23:23:43.652316 Epoch [043/100], Step [0020/0081], loss: 0.1439, cons_kl: 0.00406, |g_cons|/|g_sup|: 0.043, cos: +0.571, up: 0.5673
+2026-10-23 23:24:15.330142 Epoch [043/100], Step [0040/0081], loss: 0.1413, cons_kl: 0.00342, |g_cons|/|g_sup|: 0.043, cos: +0.571, up: 0.5754
+2026-10-23 23:24:47.283236 Epoch [043/100], Step [0060/0081], loss: 0.1425, cons_kl: 0.00450, |g_cons|/|g_sup|: 0.050, cos: +0.730, up: 0.5687
+2026-10-23 23:25:18.974803 Epoch [043/100], Step [0080/0081], loss: 0.1460, cons_kl: 0.00390, |g_cons|/|g_sup|: 0.050, cos: +0.730, up: 0.5773
+2026-10-23 23:25:20.344094 Epoch [043/100], Step [0081/0081], loss: 0.1465, cons_kl: 0.00405, |g_cons|/|g_sup|: 0.050, cos: +0.730, up: 0.5774
+CVC-300 :  0.8602466666666672
+CVC-ClinicDB :  0.9281112903225806
+Kvasir :  0.918148
+CVC-ColonDB :  0.8000007894736839
+ETIS-LaribPolypDB :  0.7834612244897964
+mean:  0.8579935941905455
+2026-10-23 23:26:42.481563 Epoch [044/100], Step [0020/0081], loss: 0.1387, cons_kl: 0.00402, |g_cons|/|g_sup|: 0.056, cos: +0.786, up: 0.5669
+2026-10-23 23:27:14.180005 Epoch [044/100], Step [0040/0081], loss: 0.1390, cons_kl: 0.00415, |g_cons|/|g_sup|: 0.056, cos: +0.786, up: 0.5849
+2026-10-23 23:27:45.935617 Epoch [044/100], Step [0060/0081], loss: 0.1510, cons_kl: 0.00829, |g_cons|/|g_sup|: 0.056, cos: +0.786, up: 0.5646
+2026-10-23 23:28:17.762174 Epoch [044/100], Step [0080/0081], loss: 0.1615, cons_kl: 0.00536, |g_cons|/|g_sup|: 0.094, cos: +0.640, up: 0.5844
+2026-10-23 23:28:19.116537 Epoch [044/100], Step [0081/0081], loss: 0.1619, cons_kl: 0.00544, |g_cons|/|g_sup|: 0.094, cos: +0.640, up: 0.5818
+CVC-300 :  0.8534716666666665
+CVC-ClinicDB :  0.9208870967741934
+Kvasir :  0.9222070000000002
+CVC-ColonDB :  0.795263421052632
+ETIS-LaribPolypDB :  0.7769841836734691
+mean:  0.8537626736333923
+2026-10-23 23:29:40.921782 Epoch [045/100], Step [0020/0081], loss: 0.1752, cons_kl: 0.01184, |g_cons|/|g_sup|: 0.094, cos: +0.640, up: 0.5954
+2026-10-23 23:30:12.620157 Epoch [045/100], Step [0040/0081], loss: 0.1726, cons_kl: 0.00741, |g_cons|/|g_sup|: 0.083, cos: +0.280, up: 0.5860
+2026-10-23 23:30:44.266300 Epoch [045/100], Step [0060/0081], loss: 0.1683, cons_kl: 0.00651, |g_cons|/|g_sup|: 0.083, cos: +0.280, up: 0.5837
+2026-10-23 23:31:15.816168 Epoch [045/100], Step [0080/0081], loss: 0.1604, cons_kl: 0.00544, |g_cons|/|g_sup|: 0.083, cos: +0.280, up: 0.5857
+2026-10-23 23:31:17.168720 Epoch [045/100], Step [0081/0081], loss: 0.1606, cons_kl: 0.00541, |g_cons|/|g_sup|: 0.083, cos: +0.280, up: 0.5782
+CVC-300 :  0.8708966666666665
+CVC-ClinicDB :  0.9225338709677419
+Kvasir :  0.9187389999999998
+CVC-ColonDB :  0.7908731578947369
+ETIS-LaribPolypDB :  0.7900821428571427
+mean:  0.8586249676772576
+2026-10-23 23:32:38.937585 Epoch [046/100], Step [0020/0081], loss: 0.1484, cons_kl: 0.00408, |g_cons|/|g_sup|: 0.050, cos: +0.381, up: 0.5707
+2026-10-23 23:33:09.300953 Epoch [046/100], Step [0040/0081], loss: 0.1474, cons_kl: 0.00475, |g_cons|/|g_sup|: 0.050, cos: +0.381, up: 0.5735
+2026-10-23 23:33:39.565971 Epoch [046/100], Step [0060/0081], loss: 0.1455, cons_kl: 0.00451, |g_cons|/|g_sup|: 0.066, cos: +0.487, up: 0.5816
+2026-10-23 23:34:09.474646 Epoch [046/100], Step [0080/0081], loss: 0.1425, cons_kl: 0.00502, |g_cons|/|g_sup|: 0.066, cos: +0.487, up: 0.5759
+2026-10-23 23:34:10.711254 Epoch [046/100], Step [0081/0081], loss: 0.1421, cons_kl: 0.00504, |g_cons|/|g_sup|: 0.066, cos: +0.487, up: 0.5762
+CVC-300 :  0.8917616666666669
+CVC-ClinicDB :  0.9231677419354837
+Kvasir :  0.918833
+CVC-ColonDB :  0.7994571052631584
+ETIS-LaribPolypDB :  0.7948729591836734
+mean:  0.8656184946097966
+2026-10-23 23:35:31.220776 Epoch [047/100], Step [0020/0081], loss: 0.1388, cons_kl: 0.00393, |g_cons|/|g_sup|: 0.066, cos: +0.487, up: 0.5641
+2026-10-23 23:36:01.474872 Epoch [047/100], Step [0040/0081], loss: 0.1392, cons_kl: 0.00381, |g_cons|/|g_sup|: 0.069, cos: +0.644, up: 0.5710
+2026-10-23 23:36:31.584167 Epoch [047/100], Step [0060/0081], loss: 0.1374, cons_kl: 0.00472, |g_cons|/|g_sup|: 0.069, cos: +0.644, up: 0.5732
+2026-10-23 23:37:01.623482 Epoch [047/100], Step [0080/0081], loss: 0.1344, cons_kl: 0.00372, |g_cons|/|g_sup|: 0.075, cos: +0.687, up: 0.5756
+2026-10-23 23:37:02.850777 Epoch [047/100], Step [0081/0081], loss: 0.1346, cons_kl: 0.00387, |g_cons|/|g_sup|: 0.075, cos: +0.687, up: 0.5735
+CVC-300 :  0.889045
+CVC-ClinicDB :  0.9278532258064516
+Kvasir :  0.9162520000000006
+CVC-ColonDB :  0.7997878947368418
+ETIS-LaribPolypDB :  0.8017852040816328
+mean:  0.8669446649249852
+2026-10-23 23:38:22.944870 Epoch [048/100], Step [0020/0081], loss: 0.1362, cons_kl: 0.00391, |g_cons|/|g_sup|: 0.075, cos: +0.687, up: 0.5692
+2026-10-23 23:38:52.882059 Epoch [048/100], Step [0040/0081], loss: 0.1345, cons_kl: 0.00384, |g_cons|/|g_sup|: 0.075, cos: +0.687, up: 0.5780
+2026-10-23 23:39:23.057238 Epoch [048/100], Step [0060/0081], loss: 0.1320, cons_kl: 0.00367, |g_cons|/|g_sup|: 0.051, cos: +0.725, up: 0.5855
+2026-10-23 23:39:52.880726 Epoch [048/100], Step [0080/0081], loss: 0.1324, cons_kl: 0.00388, |g_cons|/|g_sup|: 0.051, cos: +0.725, up: 0.5803
+2026-10-23 23:39:54.120628 Epoch [048/100], Step [0081/0081], loss: 0.1323, cons_kl: 0.00378, |g_cons|/|g_sup|: 0.051, cos: +0.725, up: 0.5861
+CVC-300 :  0.8785616666666666
+CVC-ClinicDB :  0.9240435483870968
+Kvasir :  0.9194360000000004
+CVC-ColonDB :  0.7992560526315797
+ETIS-LaribPolypDB :  0.7915091836734697
+mean:  0.8625612902717628
+2026-10-23 23:41:14.112113 Epoch [049/100], Step [0020/0081], loss: 0.1299, cons_kl: 0.00350, |g_cons|/|g_sup|: 0.064, cos: +0.529, up: 0.5696
+2026-10-23 23:41:43.990413 Epoch [049/100], Step [0040/0081], loss: 0.1279, cons_kl: 0.00350, |g_cons|/|g_sup|: 0.064, cos: +0.529, up: 0.5842
+2026-10-23 23:42:13.966907 Epoch [049/100], Step [0060/0081], loss: 0.1292, cons_kl: 0.00381, |g_cons|/|g_sup|: 0.064, cos: +0.529, up: 0.5856
+2026-10-23 23:42:44.078649 Epoch [049/100], Step [0080/0081], loss: 0.1304, cons_kl: 0.00364, |g_cons|/|g_sup|: 0.085, cos: +0.372, up: 0.5756
+2026-10-23 23:42:45.315612 Epoch [049/100], Step [0081/0081], loss: 0.1305, cons_kl: 0.00369, |g_cons|/|g_sup|: 0.085, cos: +0.372, up: 0.5774
+CVC-300 :  0.8774700000000002
+CVC-ClinicDB :  0.9230145161290321
+Kvasir :  0.9191189999999999
+CVC-ColonDB :  0.7959771052631592
+ETIS-LaribPolypDB :  0.7910040816326529
+mean:  0.8613169406049689
+2026-10-23 23:44:05.428719 Epoch [050/100], Step [0020/0081], loss: 0.1254, cons_kl: 0.00364, |g_cons|/|g_sup|: 0.085, cos: +0.372, up: 0.5899
+2026-10-23 23:44:35.482243 Epoch [050/100], Step [0040/0081], loss: 0.1267, cons_kl: 0.00340, |g_cons|/|g_sup|: 0.069, cos: +0.424, up: 0.5858
+2026-10-23 23:45:05.605004 Epoch [050/100], Step [0060/0081], loss: 0.1302, cons_kl: 0.00365, |g_cons|/|g_sup|: 0.069, cos: +0.424, up: 0.5831
+2026-10-23 23:45:35.522248 Epoch [050/100], Step [0080/0081], loss: 0.1313, cons_kl: 0.00378, |g_cons|/|g_sup|: 0.069, cos: +0.424, up: 0.5796
+2026-10-23 23:45:36.889373 Epoch [050/100], Step [0081/0081], loss: 0.1311, cons_kl: 0.00371, |g_cons|/|g_sup|: 0.051, cos: +0.514, up: 0.5764
+CVC-300 :  0.8840583333333335
+CVC-ClinicDB :  0.9260048387096772
+Kvasir :  0.9175710000000005
+CVC-ColonDB :  0.7993605263157882
+ETIS-LaribPolypDB :  0.7906336734693874
+mean:  0.8635256743656374
+2026-10-23 23:46:56.691248 Epoch [051/100], Step [0020/0081], loss: 0.1260, cons_kl: 0.00362, |g_cons|/|g_sup|: 0.051, cos: +0.514, up: 0.5929
+2026-10-23 23:47:26.545791 Epoch [051/100], Step [0040/0081], loss: 0.1267, cons_kl: 0.00370, |g_cons|/|g_sup|: 0.051, cos: +0.514, up: 0.5856
+2026-10-23 23:47:56.764306 Epoch [051/100], Step [0060/0081], loss: 0.1281, cons_kl: 0.00362, |g_cons|/|g_sup|: 0.054, cos: +0.621, up: 0.5783
+2026-10-23 23:48:26.648050 Epoch [051/100], Step [0080/0081], loss: 0.1281, cons_kl: 0.00367, |g_cons|/|g_sup|: 0.054, cos: +0.621, up: 0.5829
+2026-10-23 23:48:27.872097 Epoch [051/100], Step [0081/0081], loss: 0.1284, cons_kl: 0.00366, |g_cons|/|g_sup|: 0.054, cos: +0.621, up: 0.5814
+CVC-300 :  0.8674833333333335
+CVC-ClinicDB :  0.9214016129032256
+Kvasir :  0.9172270000000001
+CVC-ColonDB :  0.7864347368421053
+ETIS-LaribPolypDB :  0.7979867346938778
+mean:  0.8581066835545086
+2026-10-23 23:49:48.037528 Epoch [052/100], Step [0020/0081], loss: 0.1273, cons_kl: 0.00381, |g_cons|/|g_sup|: 0.055, cos: +0.637, up: 0.5870
+2026-10-23 23:50:18.832803 Epoch [052/100], Step [0040/0081], loss: 0.1262, cons_kl: 0.00392, |g_cons|/|g_sup|: 0.055, cos: +0.637, up: 0.5751
+2026-10-23 23:50:50.409869 Epoch [052/100], Step [0060/0081], loss: 0.1243, cons_kl: 0.00354, |g_cons|/|g_sup|: 0.055, cos: +0.637, up: 0.5990
+2026-10-23 23:51:22.131212 Epoch [052/100], Step [0080/0081], loss: 0.1233, cons_kl: 0.00343, |g_cons|/|g_sup|: 0.055, cos: +0.574, up: 0.5739
+2026-10-23 23:51:23.474602 Epoch [052/100], Step [0081/0081], loss: 0.1230, cons_kl: 0.00344, |g_cons|/|g_sup|: 0.055, cos: +0.574, up: 0.5791
+CVC-300 :  0.8880350000000001
+CVC-ClinicDB :  0.9228403225806455
+Kvasir :  0.9125629999999998
+CVC-ColonDB :  0.8040318421052641
+ETIS-LaribPolypDB :  0.7893887755102046
+mean:  0.8633717880392228
+2026-10-23 23:52:45.039440 Epoch [053/100], Step [0020/0081], loss: 0.1215, cons_kl: 0.00375, |g_cons|/|g_sup|: 0.055, cos: +0.574, up: 0.5766
+2026-10-23 23:53:16.809316 Epoch [053/100], Step [0040/0081], loss: 0.1224, cons_kl: 0.00364, |g_cons|/|g_sup|: 0.041, cos: +0.645, up: 0.5677
+2026-10-23 23:53:48.444891 Epoch [053/100], Step [0060/0081], loss: 0.1225, cons_kl: 0.00362, |g_cons|/|g_sup|: 0.041, cos: +0.645, up: 0.5899
+2026-10-23 23:54:20.234067 Epoch [053/100], Step [0080/0081], loss: 0.1233, cons_kl: 0.00334, |g_cons|/|g_sup|: 0.041, cos: +0.645, up: 0.5861
+2026-10-23 23:54:21.595772 Epoch [053/100], Step [0081/0081], loss: 0.1236, cons_kl: 0.00339, |g_cons|/|g_sup|: 0.041, cos: +0.645, up: 0.5855
+CVC-300 :  0.8676799999999998
+CVC-ClinicDB :  0.9220887096774193
+Kvasir :  0.9198780000000001
+CVC-ColonDB :  0.8006226315789466
+ETIS-LaribPolypDB :  0.7914321428571433
+mean:  0.8603402968227017
+2026-10-23 23:55:43.723957 Epoch [054/100], Step [0020/0081], loss: 0.1211, cons_kl: 0.00353, |g_cons|/|g_sup|: 0.070, cos: +0.707, up: 0.5888
+2026-10-23 23:56:15.266004 Epoch [054/100], Step [0040/0081], loss: 0.1221, cons_kl: 0.00389, |g_cons|/|g_sup|: 0.070, cos: +0.707, up: 0.5757
+2026-10-23 23:56:47.063767 Epoch [054/100], Step [0060/0081], loss: 0.1236, cons_kl: 0.00368, |g_cons|/|g_sup|: 0.052, cos: +0.372, up: 0.5744
+2026-10-23 23:57:18.295534 Epoch [054/100], Step [0080/0081], loss: 0.1240, cons_kl: 0.00382, |g_cons|/|g_sup|: 0.052, cos: +0.372, up: 0.5750
+2026-10-23 23:57:19.529854 Epoch [054/100], Step [0081/0081], loss: 0.1240, cons_kl: 0.00383, |g_cons|/|g_sup|: 0.052, cos: +0.372, up: 0.5748
+CVC-300 :  0.8800799999999998
+CVC-ClinicDB :  0.9242241935483875
+Kvasir :  0.9148090000000002
+CVC-ColonDB :  0.7962499999999998
+ETIS-LaribPolypDB :  0.7918035714285712
+mean:  0.8614333529953916
+2026-10-23 23:58:39.591893 Epoch [055/100], Step [0020/0081], loss: 0.1287, cons_kl: 0.00428, |g_cons|/|g_sup|: 0.052, cos: +0.372, up: 0.5938
+2026-10-23 23:59:09.647214 Epoch [055/100], Step [0040/0081], loss: 0.1256, cons_kl: 0.00382, |g_cons|/|g_sup|: 0.079, cos: +0.413, up: 0.5708
+2026-10-23 23:59:39.656700 Epoch [055/100], Step [0060/0081], loss: 0.1211, cons_kl: 0.00366, |g_cons|/|g_sup|: 0.079, cos: +0.413, up: 0.5887
+2026-10-24 00:00:09.709208 Epoch [055/100], Step [0080/0081], loss: 0.1204, cons_kl: 0.00351, |g_cons|/|g_sup|: 0.063, cos: +0.492, up: 0.5721
+2026-10-24 00:00:10.945099 Epoch [055/100], Step [0081/0081], loss: 0.1204, cons_kl: 0.00346, |g_cons|/|g_sup|: 0.063, cos: +0.492, up: 0.5824
+CVC-300 :  0.8740933333333332
+CVC-ClinicDB :  0.9214274193548386
+Kvasir :  0.9257709999999999
+CVC-ColonDB :  0.7950010526315782
+ETIS-LaribPolypDB :  0.7852520408163267
+mean:  0.8603089692272153
+2026-10-24 00:01:30.952064 Epoch [056/100], Step [0020/0081], loss: 0.1198, cons_kl: 0.00357, |g_cons|/|g_sup|: 0.063, cos: +0.492, up: 0.5810
+2026-10-24 00:02:00.786981 Epoch [056/100], Step [0040/0081], loss: 0.1204, cons_kl: 0.00384, |g_cons|/|g_sup|: 0.063, cos: +0.492, up: 0.5814
+2026-10-24 00:02:30.884486 Epoch [056/100], Step [0060/0081], loss: 0.1196, cons_kl: 0.00385, |g_cons|/|g_sup|: 0.078, cos: +0.582, up: 0.5639
+2026-10-24 00:03:00.805858 Epoch [056/100], Step [0080/0081], loss: 0.1189, cons_kl: 0.00386, |g_cons|/|g_sup|: 0.078, cos: +0.582, up: 0.5833
+2026-10-24 00:03:02.050572 Epoch [056/100], Step [0081/0081], loss: 0.1190, cons_kl: 0.00387, |g_cons|/|g_sup|: 0.078, cos: +0.582, up: 0.5868
+CVC-300 :  0.8757783333333331
+CVC-ClinicDB :  0.9267983870967745
+Kvasir :  0.9219409999999992
+CVC-ColonDB :  0.8074592105263154
+ETIS-LaribPolypDB :  0.8006596938775511
+mean:  0.8665273249667947
+2026-10-24 00:04:22.121128 Epoch [057/100], Step [0020/0081], loss: 0.1162, cons_kl: 0.00362, |g_cons|/|g_sup|: 0.069, cos: +0.619, up: 0.5847
+2026-10-24 00:04:52.179152 Epoch [057/100], Step [0040/0081], loss: 0.1168, cons_kl: 0.00374, |g_cons|/|g_sup|: 0.069, cos: +0.619, up: 0.5762
+2026-10-24 00:05:22.266929 Epoch [057/100], Step [0060/0081], loss: 0.1199, cons_kl: 0.00395, |g_cons|/|g_sup|: 0.069, cos: +0.619, up: 0.5604
+2026-10-24 00:05:52.357394 Epoch [057/100], Step [0080/0081], loss: 0.1231, cons_kl: 0.00388, |g_cons|/|g_sup|: 0.043, cos: +0.418, up: 0.5773
+2026-10-24 00:05:53.597988 Epoch [057/100], Step [0081/0081], loss: 0.1234, cons_kl: 0.00404, |g_cons|/|g_sup|: 0.043, cos: +0.418, up: 0.5770
+CVC-300 :  0.8571483333333334
+CVC-ClinicDB :  0.9207064516129032
+Kvasir :  0.9302039999999998
+CVC-ColonDB :  0.7958731578947374
+ETIS-LaribPolypDB :  0.7882357142857135
+mean:  0.8584335314253375
+2026-10-24 00:07:13.451950 Epoch [058/100], Step [0020/0081], loss: 0.1259, cons_kl: 0.00399, |g_cons|/|g_sup|: 0.043, cos: +0.418, up: 0.5749
+2026-10-24 00:07:43.478298 Epoch [058/100], Step [0040/0081], loss: 0.1215, cons_kl: 0.00369, |g_cons|/|g_sup|: 0.041, cos: +0.199, up: 0.5983
+2026-10-24 00:08:13.512109 Epoch [058/100], Step [0060/0081], loss: 0.1179, cons_kl: 0.00385, |g_cons|/|g_sup|: 0.041, cos: +0.199, up: 0.5689
+2026-10-24 00:08:43.506731 Epoch [058/100], Step [0080/0081], loss: 0.1213, cons_kl: 0.00398, |g_cons|/|g_sup|: 0.041, cos: +0.199, up: 0.5731
+2026-10-24 00:08:44.743019 Epoch [058/100], Step [0081/0081], loss: 0.1215, cons_kl: 0.00386, |g_cons|/|g_sup|: 0.041, cos: +0.199, up: 0.5763
+CVC-300 :  0.8670600000000003
+CVC-ClinicDB :  0.921174193548387
+Kvasir :  0.9183170000000002
+CVC-ColonDB :  0.8006363157894733
+ETIS-LaribPolypDB :  0.7871173469387757
+mean:  0.8588609712553271
+2026-10-24 00:10:05.027200 Epoch [059/100], Step [0020/0081], loss: 0.1171, cons_kl: 0.00372, |g_cons|/|g_sup|: 0.074, cos: +0.514, up: 0.5806
+2026-10-24 00:10:34.958565 Epoch [059/100], Step [0040/0081], loss: 0.1183, cons_kl: 0.00382, |g_cons|/|g_sup|: 0.074, cos: +0.514, up: 0.5752
+2026-10-24 00:11:05.093954 Epoch [059/100], Step [0060/0081], loss: 0.1167, cons_kl: 0.00349, |g_cons|/|g_sup|: 0.083, cos: +0.636, up: 0.5679
+2026-10-24 00:11:34.896173 Epoch [059/100], Step [0080/0081], loss: 0.1167, cons_kl: 0.00399, |g_cons|/|g_sup|: 0.083, cos: +0.636, up: 0.5801
+2026-10-24 00:11:36.123119 Epoch [059/100], Step [0081/0081], loss: 0.1168, cons_kl: 0.00396, |g_cons|/|g_sup|: 0.083, cos: +0.636, up: 0.5796
+CVC-300 :  0.8787616666666666
+CVC-ClinicDB :  0.9257967741935488
+Kvasir :  0.9191609999999997
+CVC-ColonDB :  0.7957792105263161
+ETIS-LaribPolypDB :  0.7855658163265307
+mean:  0.8610128935426123
+2026-10-24 00:12:56.122797 Epoch [060/100], Step [0020/0081], loss: 0.1206, cons_kl: 0.00366, |g_cons|/|g_sup|: 0.083, cos: +0.636, up: 0.5823
+2026-10-24 00:13:26.335519 Epoch [060/100], Step [0040/0081], loss: 0.1190, cons_kl: 0.00358, |g_cons|/|g_sup|: 0.065, cos: +0.635, up: 0.5859
+2026-10-24 00:13:56.379629 Epoch [060/100], Step [0060/0081], loss: 0.1141, cons_kl: 0.00363, |g_cons|/|g_sup|: 0.065, cos: +0.635, up: 0.5764
+2026-10-24 00:14:26.511780 Epoch [060/100], Step [0080/0081], loss: 0.1123, cons_kl: 0.00353, |g_cons|/|g_sup|: 0.103, cos: +0.476, up: 0.5828
+2026-10-24 00:14:27.759877 Epoch [060/100], Step [0081/0081], loss: 0.1128, cons_kl: 0.00368, |g_cons|/|g_sup|: 0.103, cos: +0.476, up: 0.5686
+CVC-300 :  0.8728416666666665
+CVC-ClinicDB :  0.9299758064516129
+Kvasir :  0.9235639999999999
+CVC-ColonDB :  0.8008384210526307
+ETIS-LaribPolypDB :  0.7934826530612247
+mean:  0.8641405094464268
+2026-10-24 00:15:48.220977 Epoch [061/100], Step [0020/0081], loss: 0.1122, cons_kl: 0.00493, |g_cons|/|g_sup|: 0.103, cos: +0.476, up: 0.5774
+2026-10-24 00:16:18.397435 Epoch [061/100], Step [0040/0081], loss: 0.1250, cons_kl: 0.00945, |g_cons|/|g_sup|: 0.217, cos: +0.810, up: 0.5733
+2026-10-24 00:16:48.566643 Epoch [061/100], Step [0060/0081], loss: 0.1746, cons_kl: 0.01633, |g_cons|/|g_sup|: 0.217, cos: +0.810, up: 0.5600
+2026-10-24 00:17:18.521268 Epoch [061/100], Step [0080/0081], loss: 0.2234, cons_kl: 0.03069, |g_cons|/|g_sup|: 0.217, cos: +0.810, up: 0.5823
+2026-10-24 00:17:19.761036 Epoch [061/100], Step [0081/0081], loss: 0.2236, cons_kl: 0.03018, |g_cons|/|g_sup|: 0.217, cos: +0.810, up: 0.5817
+CVC-300 :  0.8987333333333336
+CVC-ClinicDB :  0.9211580645161291
+Kvasir :  0.8993930000000002
+CVC-ColonDB :  0.8008131578947363
+ETIS-LaribPolypDB :  0.7760081632653059
+mean:  0.8592211438019011
+2026-10-24 00:18:40.234226 Epoch [062/100], Step [0020/0081], loss: 0.2047, cons_kl: 0.01383, |g_cons|/|g_sup|: 0.179, cos: +0.749, up: 0.5818
+2026-10-24 00:19:10.184799 Epoch [062/100], Step [0040/0081], loss: 0.1847, cons_kl: 0.01092, |g_cons|/|g_sup|: 0.179, cos: +0.749, up: 0.5870
+2026-10-24 00:19:40.368175 Epoch [062/100], Step [0060/0081], loss: 0.1632, cons_kl: 0.00807, |g_cons|/|g_sup|: 0.230, cos: +0.813, up: 0.5799
+2026-10-24 00:20:10.189129 Epoch [062/100], Step [0080/0081], loss: 0.1561, cons_kl: 0.00849, |g_cons|/|g_sup|: 0.230, cos: +0.813, up: 0.5709
+2026-10-24 00:20:11.424044 Epoch [062/100], Step [0081/0081], loss: 0.1560, cons_kl: 0.00898, |g_cons|/|g_sup|: 0.230, cos: +0.813, up: 0.5714
+CVC-300 :  0.8555516666666668
+CVC-ClinicDB :  0.907533870967742
+Kvasir :  0.8888849999999998
+CVC-ColonDB :  0.7793286842105266
+ETIS-LaribPolypDB :  0.7936066326530615
+mean:  0.8449811708995993
+2026-10-24 00:21:31.806427 Epoch [063/100], Step [0020/0081], loss: 0.2588, cons_kl: 0.01799, |g_cons|/|g_sup|: 0.230, cos: +0.813, up: 0.5863
+2026-10-24 00:22:01.915911 Epoch [063/100], Step [0040/0081], loss: 0.2128, cons_kl: 0.01129, |g_cons|/|g_sup|: 0.107, cos: +0.650, up: 0.5937
+2026-10-24 00:22:31.874266 Epoch [063/100], Step [0060/0081], loss: 0.1636, cons_kl: 0.00791, |g_cons|/|g_sup|: 0.107, cos: +0.650, up: 0.5792
+2026-10-24 00:23:01.970583 Epoch [063/100], Step [0080/0081], loss: 0.1666, cons_kl: 0.01011, |g_cons|/|g_sup|: 0.052, cos: +0.501, up: 0.5965
+2026-10-24 00:23:03.196495 Epoch [063/100], Step [0081/0081], loss: 0.1661, cons_kl: 0.01000, |g_cons|/|g_sup|: 0.052, cos: +0.501, up: 0.5963
+CVC-300 :  0.8676150000000002
+CVC-ClinicDB :  0.9035112903225803
+Kvasir :  0.9075660000000005
+CVC-ColonDB :  0.8003805263157889
+ETIS-LaribPolypDB :  0.7673678571428576
+mean:  0.8492881347562454
+2026-10-24 00:24:22.841355 Epoch [064/100], Step [0020/0081], loss: 0.1387, cons_kl: 0.00545, |g_cons|/|g_sup|: 0.052, cos: +0.501, up: 0.5958
+2026-10-24 00:24:52.736015 Epoch [064/100], Step [0040/0081], loss: 0.1367, cons_kl: 0.00523, |g_cons|/|g_sup|: 0.052, cos: +0.501, up: 0.5977
+2026-10-24 00:25:22.869062 Epoch [064/100], Step [0060/0081], loss: 0.1331, cons_kl: 0.00615, |g_cons|/|g_sup|: 0.057, cos: +0.299, up: 0.5698
+2026-10-24 00:25:52.681264 Epoch [064/100], Step [0080/0081], loss: 0.1285, cons_kl: 0.00443, |g_cons|/|g_sup|: 0.057, cos: +0.299, up: 0.5778
+2026-10-24 00:25:53.907793 Epoch [064/100], Step [0081/0081], loss: 0.1288, cons_kl: 0.00449, |g_cons|/|g_sup|: 0.057, cos: +0.299, up: 0.5757
+CVC-300 :  0.8711099999999996
+CVC-ClinicDB :  0.9236790322580646
+Kvasir :  0.920052
+CVC-ColonDB :  0.8036434210526315
+ETIS-LaribPolypDB :  0.7804096938775507
+mean:  0.8597788294376493
+2026-10-24 00:27:14.440994 Epoch [065/100], Step [0020/0081], loss: 0.1201, cons_kl: 0.00475, |g_cons|/|g_sup|: 0.078, cos: +0.500, up: 0.5759
+2026-10-24 00:27:44.287706 Epoch [065/100], Step [0040/0081], loss: 0.1191, cons_kl: 0.00415, |g_cons|/|g_sup|: 0.078, cos: +0.500, up: 0.5689
+2026-10-24 00:28:14.336061 Epoch [065/100], Step [0060/0081], loss: 0.1184, cons_kl: 0.00381, |g_cons|/|g_sup|: 0.078, cos: +0.500, up: 0.5739
+2026-10-24 00:28:44.427763 Epoch [065/100], Step [0080/0081], loss: 0.1175, cons_kl: 0.00427, |g_cons|/|g_sup|: 0.057, cos: +0.605, up: 0.5876
+2026-10-24 00:28:45.668898 Epoch [065/100], Step [0081/0081], loss: 0.1179, cons_kl: 0.00424, |g_cons|/|g_sup|: 0.057, cos: +0.605, up: 0.5941
+CVC-300 :  0.8682466666666666
+CVC-ClinicDB :  0.9231661290322585
+Kvasir :  0.9236639999999993
+CVC-ColonDB :  0.8015692105263154
+ETIS-LaribPolypDB :  0.7753959183673469
+mean:  0.8584083849185173
+2026-10-24 00:30:05.273985 Epoch [066/100], Step [0020/0081], loss: 0.1143, cons_kl: 0.00396, |g_cons|/|g_sup|: 0.057, cos: +0.605, up: 0.5897
+2026-10-24 00:30:35.302617 Epoch [066/100], Step [0040/0081], loss: 0.1133, cons_kl: 0.00386, |g_cons|/|g_sup|: 0.080, cos: +0.524, up: 0.5756
+2026-10-24 00:31:05.223662 Epoch [066/100], Step [0060/0081], loss: 0.1103, cons_kl: 0.00334, |g_cons|/|g_sup|: 0.080, cos: +0.524, up: 0.5798
+2026-10-24 00:31:34.996426 Epoch [066/100], Step [0080/0081], loss: 0.1086, cons_kl: 0.00344, |g_cons|/|g_sup|: 0.080, cos: +0.524, up: 0.5665
+2026-10-24 00:31:36.219607 Epoch [066/100], Step [0081/0081], loss: 0.1088, cons_kl: 0.00342, |g_cons|/|g_sup|: 0.080, cos: +0.524, up: 0.5664
+CVC-300 :  0.8706033333333334
+CVC-ClinicDB :  0.9220774193548386
+Kvasir :  0.9234329999999998
+CVC-ColonDB :  0.8044868421052632
+ETIS-LaribPolypDB :  0.784702551020408
+mean:  0.8610606291627686
+2026-10-24 00:32:56.232481 Epoch [067/100], Step [0020/0081], loss: 0.1077, cons_kl: 0.00345, |g_cons|/|g_sup|: 0.073, cos: +0.527, up: 0.5746
+2026-10-24 00:33:26.223514 Epoch [067/100], Step [0040/0081], loss: 0.1081, cons_kl: 0.00354, |g_cons|/|g_sup|: 0.073, cos: +0.527, up: 0.5920
+2026-10-24 00:33:56.341607 Epoch [067/100], Step [0060/0081], loss: 0.1078, cons_kl: 0.00337, |g_cons|/|g_sup|: 0.102, cos: +0.732, up: 0.5736
+2026-10-24 00:34:26.222195 Epoch [067/100], Step [0080/0081], loss: 0.1072, cons_kl: 0.00426, |g_cons|/|g_sup|: 0.102, cos: +0.732, up: 0.5800
+2026-10-24 00:34:27.454196 Epoch [067/100], Step [0081/0081], loss: 0.1082, cons_kl: 0.00709, |g_cons|/|g_sup|: 0.102, cos: +0.732, up: 0.5913
+CVC-300 :  0.8758000000000002
+CVC-ClinicDB :  0.9165080645161291
+Kvasir :  0.9173039999999999
+CVC-ColonDB :  0.7696871052631581
+ETIS-LaribPolypDB :  0.7632760204081629
+mean:  0.8485150380374901
+2026-10-24 00:35:47.157190 Epoch [068/100], Step [0020/0081], loss: 0.1528, cons_kl: 0.01195, |g_cons|/|g_sup|: 0.102, cos: +0.732, up: 0.5888
+2026-10-24 00:36:17.284761 Epoch [068/100], Step [0040/0081], loss: 0.1485, cons_kl: 0.00781, |g_cons|/|g_sup|: 0.281, cos: +0.986, up: 0.5805
+2026-10-24 00:36:47.404436 Epoch [068/100], Step [0060/0081], loss: 0.1383, cons_kl: 0.00662, |g_cons|/|g_sup|: 0.281, cos: +0.986, up: 0.5841
+2026-10-24 00:37:17.571713 Epoch [068/100], Step [0080/0081], loss: 0.1292, cons_kl: 0.00565, |g_cons|/|g_sup|: 0.135, cos: +0.630, up: 0.5793
+2026-10-24 00:37:18.822227 Epoch [068/100], Step [0081/0081], loss: 0.1284, cons_kl: 0.00560, |g_cons|/|g_sup|: 0.135, cos: +0.630, up: 0.5783
+CVC-300 :  0.8681099999999997
+CVC-ClinicDB :  0.9210145161290318
+Kvasir :  0.9200740000000003
+CVC-ColonDB :  0.7856176315789474
+ETIS-LaribPolypDB :  0.7816030612244897
+mean:  0.8552838417864939
+2026-10-24 00:38:39.209278 Epoch [069/100], Step [0020/0081], loss: 0.1122, cons_kl: 0.00391, |g_cons|/|g_sup|: 0.135, cos: +0.630, up: 0.5790
+2026-10-24 00:39:09.156031 Epoch [069/100], Step [0040/0081], loss: 0.1133, cons_kl: 0.00401, |g_cons|/|g_sup|: 0.135, cos: +0.630, up: 0.5811
+2026-10-24 00:39:39.251942 Epoch [069/100], Step [0060/0081], loss: 0.1123, cons_kl: 0.00378, |g_cons|/|g_sup|: 0.100, cos: +0.542, up: 0.5869
+2026-10-24 00:40:09.089316 Epoch [069/100], Step [0080/0081], loss: 0.1110, cons_kl: 0.00420, |g_cons|/|g_sup|: 0.100, cos: +0.542, up: 0.5757
+2026-10-24 00:40:10.311055 Epoch [069/100], Step [0081/0081], loss: 0.1108, cons_kl: 0.00413, |g_cons|/|g_sup|: 0.100, cos: +0.542, up: 0.5750
+CVC-300 :  0.8712599999999998
+CVC-ClinicDB :  0.9232967741935486
+Kvasir :  0.9205979999999994
+CVC-ColonDB :  0.797658157894738
+ETIS-LaribPolypDB :  0.795135714285714
+mean:  0.8615897292747998
+2026-10-24 00:41:30.230507 Epoch [070/100], Step [0020/0081], loss: 0.1105, cons_kl: 0.00353, |g_cons|/|g_sup|: 0.047, cos: +0.507, up: 0.5605
+2026-10-24 00:42:00.274195 Epoch [070/100], Step [0040/0081], loss: 0.1082, cons_kl: 0.00348, |g_cons|/|g_sup|: 0.047, cos: +0.507, up: 0.5751
+2026-10-24 00:42:30.313923 Epoch [070/100], Step [0060/0081], loss: 0.1058, cons_kl: 0.00363, |g_cons|/|g_sup|: 0.047, cos: +0.507, up: 0.5801
+2026-10-24 00:43:00.281404 Epoch [070/100], Step [0080/0081], loss: 0.1053, cons_kl: 0.00323, |g_cons|/|g_sup|: 0.091, cos: +0.594, up: 0.5823
+2026-10-24 00:43:01.505897 Epoch [070/100], Step [0081/0081], loss: 0.1050, cons_kl: 0.00327, |g_cons|/|g_sup|: 0.091, cos: +0.594, up: 0.5799
+CVC-300 :  0.8786166666666664
+CVC-ClinicDB :  0.9241951612903228
+Kvasir :  0.9116280000000002
+CVC-ColonDB :  0.7951257894736832
+ETIS-LaribPolypDB :  0.7967454081632649
+mean:  0.8612622051187874
+2026-10-24 00:44:21.283773 Epoch [071/100], Step [0020/0081], loss: 0.1032, cons_kl: 0.00347, |g_cons|/|g_sup|: 0.091, cos: +0.594, up: 0.5684
+2026-10-24 00:44:51.317280 Epoch [071/100], Step [0040/0081], loss: 0.1030, cons_kl: 0.00299, |g_cons|/|g_sup|: 0.072, cos: +0.496, up: 0.5792
+2026-10-24 00:45:21.401701 Epoch [071/100], Step [0060/0081], loss: 0.1025, cons_kl: 0.00329, |g_cons|/|g_sup|: 0.072, cos: +0.496, up: 0.5690
+2026-10-24 00:45:51.455047 Epoch [071/100], Step [0080/0081], loss: 0.1021, cons_kl: 0.00313, |g_cons|/|g_sup|: 0.065, cos: +0.473, up: 0.5757
+2026-10-24 00:45:52.682567 Epoch [071/100], Step [0081/0081], loss: 0.1020, cons_kl: 0.00323, |g_cons|/|g_sup|: 0.065, cos: +0.473, up: 0.5746
+CVC-300 :  0.8729283333333335
+CVC-ClinicDB :  0.9241435483870967
+Kvasir :  0.9208069999999995
+CVC-ColonDB :  0.7966968421052633
+ETIS-LaribPolypDB :  0.79699387755102
+mean:  0.8623139202753427
+2026-10-24 00:47:12.882645 Epoch [072/100], Step [0020/0081], loss: 0.1006, cons_kl: 0.00338, |g_cons|/|g_sup|: 0.065, cos: +0.473, up: 0.5728
+2026-10-24 00:47:42.796935 Epoch [072/100], Step [0040/0081], loss: 0.1006, cons_kl: 0.00309, |g_cons|/|g_sup|: 0.065, cos: +0.473, up: 0.5944
+2026-10-24 00:48:12.942215 Epoch [072/100], Step [0060/0081], loss: 0.1004, cons_kl: 0.00327, |g_cons|/|g_sup|: 0.083, cos: +0.458, up: 0.5770
+2026-10-24 00:48:42.830738 Epoch [072/100], Step [0080/0081], loss: 0.1013, cons_kl: 0.00327, |g_cons|/|g_sup|: 0.083, cos: +0.458, up: 0.5645
+2026-10-24 00:48:44.060722 Epoch [072/100], Step [0081/0081], loss: 0.1009, cons_kl: 0.00319, |g_cons|/|g_sup|: 0.083, cos: +0.458, up: 0.5643
+CVC-300 :  0.8727033333333334
+CVC-ClinicDB :  0.9232790322580645
+Kvasir :  0.9209750000000001
+CVC-ColonDB :  0.7960623684210534
+ETIS-LaribPolypDB :  0.7939158163265309
+mean:  0.8613871100677963
+2026-10-24 00:50:04.267938 Epoch [073/100], Step [0020/0081], loss: 0.0993, cons_kl: 0.00311, |g_cons|/|g_sup|: 0.052, cos: +0.736, up: 0.5814
+2026-10-24 00:50:34.121177 Epoch [073/100], Step [0040/0081], loss: 0.1003, cons_kl: 0.00309, |g_cons|/|g_sup|: 0.052, cos: +0.736, up: 0.5690
+2026-10-24 00:51:04.214094 Epoch [073/100], Step [0060/0081], loss: 0.1005, cons_kl: 0.00314, |g_cons|/|g_sup|: 0.052, cos: +0.736, up: 0.5728
+2026-10-24 00:51:34.222401 Epoch [073/100], Step [0080/0081], loss: 0.1003, cons_kl: 0.00315, |g_cons|/|g_sup|: 0.063, cos: +0.553, up: 0.5701
+2026-10-24 00:51:35.444126 Epoch [073/100], Step [0081/0081], loss: 0.1006, cons_kl: 0.00311, |g_cons|/|g_sup|: 0.063, cos: +0.553, up: 0.5706
+CVC-300 :  0.8725766666666668
+CVC-ClinicDB :  0.9234435483870969
+Kvasir :  0.9214129999999997
+CVC-ColonDB :  0.79937552631579
+ETIS-LaribPolypDB :  0.7949535714285716
+mean:  0.862352462559625
+2026-10-24 00:52:55.582899 Epoch [074/100], Step [0020/0081], loss: 0.1008, cons_kl: 0.00308, |g_cons|/|g_sup|: 0.063, cos: +0.553, up: 0.5684
+2026-10-24 00:53:25.650996 Epoch [074/100], Step [0040/0081], loss: 0.1001, cons_kl: 0.00278, |g_cons|/|g_sup|: 0.057, cos: +0.512, up: 0.5734
+2026-10-24 00:53:55.586302 Epoch [074/100], Step [0060/0081], loss: 0.0990, cons_kl: 0.00304, |g_cons|/|g_sup|: 0.057, cos: +0.512, up: 0.5874
+2026-10-24 00:54:25.525280 Epoch [074/100], Step [0080/0081], loss: 0.0979, cons_kl: 0.00297, |g_cons|/|g_sup|: 0.057, cos: +0.512, up: 0.5747
+2026-10-24 00:54:26.758923 Epoch [074/100], Step [0081/0081], loss: 0.0979, cons_kl: 0.00296, |g_cons|/|g_sup|: 0.057, cos: +0.512, up: 0.5740
+CVC-300 :  0.8718683333333334
+CVC-ClinicDB :  0.9242161290322579
+Kvasir :  0.9237700000000004
+CVC-ColonDB :  0.7991642105263151
+ETIS-LaribPolypDB :  0.7950948979591834
+mean:  0.8628227141702182
+2026-10-24 00:55:46.940622 Epoch [075/100], Step [0020/0081], loss: 0.0983, cons_kl: 0.00285, |g_cons|/|g_sup|: 0.062, cos: +0.526, up: 0.5733
+2026-10-24 00:56:16.888818 Epoch [075/100], Step [0040/0081], loss: 0.0972, cons_kl: 0.00307, |g_cons|/|g_sup|: 0.062, cos: +0.526, up: 0.5646
+2026-10-24 00:56:47.097109 Epoch [075/100], Step [0060/0081], loss: 0.0975, cons_kl: 0.00315, |g_cons|/|g_sup|: 0.076, cos: +0.740, up: 0.5802
+2026-10-24 00:57:17.086841 Epoch [075/100], Step [0080/0081], loss: 0.0982, cons_kl: 0.00313, |g_cons|/|g_sup|: 0.076, cos: +0.740, up: 0.5775
+2026-10-24 00:57:18.321964 Epoch [075/100], Step [0081/0081], loss: 0.0983, cons_kl: 0.00304, |g_cons|/|g_sup|: 0.076, cos: +0.740, up: 0.5883
+CVC-300 :  0.8709083333333335
+CVC-ClinicDB :  0.9238709677419353
+Kvasir :  0.926431
+CVC-ColonDB :  0.7970286842105267
+ETIS-LaribPolypDB :  0.7932275510204088
+mean:  0.8622933072612409
+2026-10-24 00:58:38.863991 Epoch [076/100], Step [0020/0081], loss: 0.0970, cons_kl: 0.00305, |g_cons|/|g_sup|: 0.076, cos: +0.740, up: 0.5760
+2026-10-24 00:59:08.870730 Epoch [076/100], Step [0040/0081], loss: 0.0967, cons_kl: 0.00300, |g_cons|/|g_sup|: 0.066, cos: +0.607, up: 0.5854
+2026-10-24 00:59:38.885718 Epoch [076/100], Step [0060/0081], loss: 0.0966, cons_kl: 0.00273, |g_cons|/|g_sup|: 0.066, cos: +0.607, up: 0.5818
+2026-10-24 01:00:08.987444 Epoch [076/100], Step [0080/0081], loss: 0.0983, cons_kl: 0.00333, |g_cons|/|g_sup|: 0.060, cos: +0.592, up: 0.5706
+2026-10-24 01:00:10.210470 Epoch [076/100], Step [0081/0081], loss: 0.0978, cons_kl: 0.00332, |g_cons|/|g_sup|: 0.060, cos: +0.592, up: 0.5768
+CVC-300 :  0.8763216666666664
+CVC-ClinicDB :  0.9242693548387096
+Kvasir :  0.9235519999999995
+CVC-ColonDB :  0.7988199999999998
+ETIS-LaribPolypDB :  0.7884045918367353
+mean:  0.862273522668422
+2026-10-24 01:01:30.072923 Epoch [077/100], Step [0020/0081], loss: 0.1014, cons_kl: 0.00323, |g_cons|/|g_sup|: 0.060, cos: +0.592, up: 0.5719
+2026-10-24 01:01:59.942072 Epoch [077/100], Step [0040/0081], loss: 0.1000, cons_kl: 0.00338, |g_cons|/|g_sup|: 0.060, cos: +0.592, up: 0.5706
+2026-10-24 01:02:30.057488 Epoch [077/100], Step [0060/0081], loss: 0.0979, cons_kl: 0.00310, |g_cons|/|g_sup|: 0.063, cos: +0.601, up: 0.5663
+2026-10-24 01:02:59.946776 Epoch [077/100], Step [0080/0081], loss: 0.0977, cons_kl: 0.00295, |g_cons|/|g_sup|: 0.063, cos: +0.601, up: 0.5794
+2026-10-24 01:03:01.193705 Epoch [077/100], Step [0081/0081], loss: 0.0977, cons_kl: 0.00291, |g_cons|/|g_sup|: 0.063, cos: +0.601, up: 0.5802
+CVC-300 :  0.877143333333333
+CVC-ClinicDB :  0.924232258064516
+Kvasir :  0.925767
+CVC-ColonDB :  0.7998336842105266
+ETIS-LaribPolypDB :  0.7938387755102042
+mean:  0.864163010223716
+2026-10-24 01:04:21.056877 Epoch [078/100], Step [0020/0081], loss: 0.0984, cons_kl: 0.00296, |g_cons|/|g_sup|: 0.065, cos: +0.611, up: 0.5837
+2026-10-24 01:04:50.974649 Epoch [078/100], Step [0040/0081], loss: 0.0985, cons_kl: 0.00296, |g_cons|/|g_sup|: 0.065, cos: +0.611, up: 0.5663
+2026-10-24 01:05:20.989676 Epoch [078/100], Step [0060/0081], loss: 0.0992, cons_kl: 0.00310, |g_cons|/|g_sup|: 0.065, cos: +0.611, up: 0.5758
+2026-10-24 01:05:51.119365 Epoch [078/100], Step [0080/0081], loss: 0.0984, cons_kl: 0.00418, |g_cons|/|g_sup|: 0.059, cos: +0.472, up: 0.5732
+2026-10-24 01:05:52.360778 Epoch [078/100], Step [0081/0081], loss: 0.0982, cons_kl: 0.00433, |g_cons|/|g_sup|: 0.059, cos: +0.472, up: 0.5760
+CVC-300 :  0.8606183333333332
+CVC-ClinicDB :  0.9220290322580644
+Kvasir :  0.9238239999999994
+CVC-ColonDB :  0.7999063157894737
+ETIS-LaribPolypDB :  0.7659147959183672
+mean:  0.8544584954598475
+2026-10-24 01:07:12.643139 Epoch [079/100], Step [0020/0081], loss: 0.1089, cons_kl: 0.00384, |g_cons|/|g_sup|: 0.059, cos: +0.472, up: 0.5838
+2026-10-24 01:07:42.761130 Epoch [079/100], Step [0040/0081], loss: 0.1097, cons_kl: 0.00418, |g_cons|/|g_sup|: 0.054, cos: +0.705, up: 0.5629
+2026-10-24 01:08:12.938522 Epoch [079/100], Step [0060/0081], loss: 0.1087, cons_kl: 0.00369, |g_cons|/|g_sup|: 0.054, cos: +0.705, up: 0.5806
+2026-10-24 01:08:42.913132 Epoch [079/100], Step [0080/0081], loss: 0.1138, cons_kl: 0.00558, |g_cons|/|g_sup|: 0.054, cos: +0.705, up: 0.5779
+2026-10-24 01:08:44.162015 Epoch [079/100], Step [0081/0081], loss: 0.1130, cons_kl: 0.00531, |g_cons|/|g_sup|: 0.054, cos: +0.705, up: 0.5735
+CVC-300 :  0.8631466666666668
+CVC-ClinicDB :  0.9233338709677419
+Kvasir :  0.9178890000000002
+CVC-ColonDB :  0.7894760526315788
+ETIS-LaribPolypDB :  0.789438775510204
+mean:  0.8566568731552383
+2026-10-24 01:10:04.970876 Epoch [080/100], Step [0020/0081], loss: 0.1079, cons_kl: 0.00385, |g_cons|/|g_sup|: 0.071, cos: +0.463, up: 0.5916
+2026-10-24 01:10:34.844355 Epoch [080/100], Step [0040/0081], loss: 0.1102, cons_kl: 0.00411, |g_cons|/|g_sup|: 0.071, cos: +0.463, up: 0.5838
+2026-10-24 01:11:05.023159 Epoch [080/100], Step [0060/0081], loss: 0.1103, cons_kl: 0.00405, |g_cons|/|g_sup|: 0.080, cos: +0.718, up: 0.5777
+2026-10-24 01:11:34.952696 Epoch [080/100], Step [0080/0081], loss: 0.1043, cons_kl: 0.00360, |g_cons|/|g_sup|: 0.080, cos: +0.718, up: 0.5690
+2026-10-24 01:11:36.191662 Epoch [080/100], Step [0081/0081], loss: 0.1048, cons_kl: 0.00374, |g_cons|/|g_sup|: 0.080, cos: +0.718, up: 0.5685
+CVC-300 :  0.8639249999999997
+CVC-ClinicDB :  0.9290145161290324
+Kvasir :  0.9250710000000001
+CVC-ColonDB :  0.7968486842105265
+ETIS-LaribPolypDB :  0.7911265306122454
+mean:  0.8611971461903607
+2026-10-24 01:12:56.224676 Epoch [081/100], Step [0020/0081], loss: 0.0990, cons_kl: 0.00314, |g_cons|/|g_sup|: 0.078, cos: +0.541, up: 0.5817
+2026-10-24 01:13:26.170684 Epoch [081/100], Step [0040/0081], loss: 0.0996, cons_kl: 0.00336, |g_cons|/|g_sup|: 0.078, cos: +0.541, up: 0.5791
+2026-10-24 01:13:56.228824 Epoch [081/100], Step [0060/0081], loss: 0.1008, cons_kl: 0.00328, |g_cons|/|g_sup|: 0.078, cos: +0.541, up: 0.5800
+2026-10-24 01:14:26.276762 Epoch [081/100], Step [0080/0081], loss: 0.1007, cons_kl: 0.00329, |g_cons|/|g_sup|: 0.072, cos: +0.539, up: 0.5758
+2026-10-24 01:14:27.526165 Epoch [081/100], Step [0081/0081], loss: 0.1007, cons_kl: 0.00335, |g_cons|/|g_sup|: 0.072, cos: +0.539, up: 0.5772
+CVC-300 :  0.8597516666666666
+CVC-ClinicDB :  0.9342516129032257
+Kvasir :  0.9286739999999996
+CVC-ColonDB :  0.7995142105263153
+ETIS-LaribPolypDB :  0.7836581632653061
+mean:  0.8611699306723025
+2026-10-24 01:15:47.317235 Epoch [082/100], Step [0020/0081], loss: 0.0961, cons_kl: 0.00292, |g_cons|/|g_sup|: 0.072, cos: +0.539, up: 0.5815
+2026-10-24 01:16:17.348820 Epoch [082/100], Step [0040/0081], loss: 0.0979, cons_kl: 0.00354, |g_cons|/|g_sup|: 0.076, cos: +0.726, up: 0.5796
+2026-10-24 01:16:47.348844 Epoch [082/100], Step [0060/0081], loss: 0.0992, cons_kl: 0.00304, |g_cons|/|g_sup|: 0.076, cos: +0.726, up: 0.5814
+2026-10-24 01:17:17.381466 Epoch [082/100], Step [0080/0081], loss: 0.0979, cons_kl: 0.00311, |g_cons|/|g_sup|: 0.076, cos: +0.726, up: 0.5704
+2026-10-24 01:17:18.630189 Epoch [082/100], Step [0081/0081], loss: 0.0976, cons_kl: 0.00317, |g_cons|/|g_sup|: 0.076, cos: +0.726, up: 0.5712
+CVC-300 :  0.8679783333333332
+CVC-ClinicDB :  0.9261532258064515
+Kvasir :  0.9256270000000001
+CVC-ColonDB :  0.8023160526315796
+ETIS-LaribPolypDB :  0.7878397959183676
+mean:  0.8619828815379463
+2026-10-24 01:18:39.213848 Epoch [083/100], Step [0020/0081], loss: 0.0967, cons_kl: 0.00292, |g_cons|/|g_sup|: 0.059, cos: +0.573, up: 0.5664
+2026-10-24 01:19:09.121462 Epoch [083/100], Step [0040/0081], loss: 0.0963, cons_kl: 0.00288, |g_cons|/|g_sup|: 0.059, cos: +0.573, up: 0.5818
+2026-10-24 01:19:39.348365 Epoch [083/100], Step [0060/0081], loss: 0.0968, cons_kl: 0.00310, |g_cons|/|g_sup|: 0.056, cos: +0.503, up: 0.5804
+2026-10-24 01:20:09.218122 Epoch [083/100], Step [0080/0081], loss: 0.0970, cons_kl: 0.00277, |g_cons|/|g_sup|: 0.056, cos: +0.503, up: 0.5945
+2026-10-24 01:20:10.456413 Epoch [083/100], Step [0081/0081], loss: 0.0970, cons_kl: 0.00279, |g_cons|/|g_sup|: 0.056, cos: +0.503, up: 0.5931
+CVC-300 :  0.8626366666666666
+CVC-ClinicDB :  0.9256032258064515
+Kvasir :  0.9312789999999999
+CVC-ColonDB :  0.7977171052631573
+ETIS-LaribPolypDB :  0.7834999999999999
+mean:  0.860147199547255
+2026-10-24 01:21:30.340535 Epoch [084/100], Step [0020/0081], loss: 0.0951, cons_kl: 0.00307, |g_cons|/|g_sup|: 0.056, cos: +0.503, up: 0.5845
+2026-10-24 01:22:00.498183 Epoch [084/100], Step [0040/0081], loss: 0.0966, cons_kl: 0.00330, |g_cons|/|g_sup|: 0.092, cos: +0.554, up: 0.5751
+2026-10-24 01:22:30.523342 Epoch [084/100], Step [0060/0081], loss: 0.0968, cons_kl: 0.00296, |g_cons|/|g_sup|: 0.092, cos: +0.554, up: 0.5777
+2026-10-24 01:23:00.555405 Epoch [084/100], Step [0080/0081], loss: 0.0963, cons_kl: 0.00325, |g_cons|/|g_sup|: 0.065, cos: +0.609, up: 0.5891
+2026-10-24 01:23:01.790379 Epoch [084/100], Step [0081/0081], loss: 0.0966, cons_kl: 0.00323, |g_cons|/|g_sup|: 0.065, cos: +0.609, up: 0.5860
+CVC-300 :  0.8649366666666669
+CVC-ClinicDB :  0.9241161290322578
+Kvasir :  0.9243939999999995
+CVC-ColonDB :  0.7991460526315789
+ETIS-LaribPolypDB :  0.7905505102040814
+mean:  0.8606286717069169
+2026-10-24 01:24:21.665534 Epoch [085/100], Step [0020/0081], loss: 0.0977, cons_kl: 0.00337, |g_cons|/|g_sup|: 0.065, cos: +0.609, up: 0.5801
+2026-10-24 01:24:51.559693 Epoch [085/100], Step [0040/0081], loss: 0.0984, cons_kl: 0.00314, |g_cons|/|g_sup|: 0.065, cos: +0.609, up: 0.5856
+2026-10-24 01:25:21.732475 Epoch [085/100], Step [0060/0081], loss: 0.0980, cons_kl: 0.00318, |g_cons|/|g_sup|: 0.065, cos: +0.699, up: 0.5708
+2026-10-24 01:25:51.642022 Epoch [085/100], Step [0080/0081], loss: 0.0960, cons_kl: 0.00307, |g_cons|/|g_sup|: 0.065, cos: +0.699, up: 0.5682
+2026-10-24 01:25:52.879422 Epoch [085/100], Step [0081/0081], loss: 0.0958, cons_kl: 0.00303, |g_cons|/|g_sup|: 0.065, cos: +0.699, up: 0.5659
+CVC-300 :  0.8723883333333332
+CVC-ClinicDB :  0.9262629032258062
+Kvasir :  0.9237049999999997
+CVC-ColonDB :  0.7943539473684212
+ETIS-LaribPolypDB :  0.7940448979591836
+mean:  0.8621510163773488
+2026-10-24 01:27:12.931732 Epoch [086/100], Step [0020/0081], loss: 0.0961, cons_kl: 0.00335, |g_cons|/|g_sup|: 0.104, cos: +0.526, up: 0.5839
+2026-10-24 01:27:42.843106 Epoch [086/100], Step [0040/0081], loss: 0.0952, cons_kl: 0.00287, |g_cons|/|g_sup|: 0.104, cos: +0.526, up: 0.5979
+2026-10-24 01:28:13.022890 Epoch [086/100], Step [0060/0081], loss: 0.0959, cons_kl: 0.00310, |g_cons|/|g_sup|: 0.104, cos: +0.526, up: 0.5729
+2026-10-24 01:28:43.073767 Epoch [086/100], Step [0080/0081], loss: 0.0978, cons_kl: 0.00312, |g_cons|/|g_sup|: 0.061, cos: +0.572, up: 0.5646
+2026-10-24 01:28:44.309751 Epoch [086/100], Step [0081/0081], loss: 0.0977, cons_kl: 0.00315, |g_cons|/|g_sup|: 0.061, cos: +0.572, up: 0.5697
+CVC-300 :  0.863808333333333
+CVC-ClinicDB :  0.9250306451612902
+Kvasir :  0.9298190000000003
+CVC-ColonDB :  0.8011710526315782
+ETIS-LaribPolypDB :  0.7878158163265312
+mean:  0.8615289694905466
+2026-10-24 01:30:04.139696 Epoch [087/100], Step [0020/0081], loss: 0.0976, cons_kl: 0.00322, |g_cons|/|g_sup|: 0.061, cos: +0.572, up: 0.5741
+2026-10-24 01:30:34.256908 Epoch [087/100], Step [0040/0081], loss: 0.0964, cons_kl: 0.00322, |g_cons|/|g_sup|: 0.066, cos: +0.549, up: 0.5830
+2026-10-24 01:31:04.243740 Epoch [087/100], Step [0060/0081], loss: 0.0947, cons_kl: 0.00311, |g_cons|/|g_sup|: 0.066, cos: +0.549, up: 0.5797
+2026-10-24 01:31:34.080482 Epoch [087/100], Step [0080/0081], loss: 0.0935, cons_kl: 0.00304, |g_cons|/|g_sup|: 0.066, cos: +0.549, up: 0.5858
+2026-10-24 01:31:35.328659 Epoch [087/100], Step [0081/0081], loss: 0.0936, cons_kl: 0.00301, |g_cons|/|g_sup|: 0.066, cos: +0.549, up: 0.5905
+CVC-300 :  0.8751599999999997
+CVC-ClinicDB :  0.9243870967741935
+Kvasir :  0.9277740000000003
+CVC-ColonDB :  0.8059392105263156
+ETIS-LaribPolypDB :  0.7824545918367344
+mean:  0.8631429798274487
+2026-10-24 01:32:55.193586 Epoch [088/100], Step [0020/0081], loss: 0.0992, cons_kl: 0.00485, |g_cons|/|g_sup|: 0.060, cos: +0.543, up: 0.5859
+2026-10-24 01:33:25.103659 Epoch [088/100], Step [0040/0081], loss: 0.0963, cons_kl: 0.00304, |g_cons|/|g_sup|: 0.060, cos: +0.543, up: 0.5788
+2026-10-24 01:33:55.322775 Epoch [088/100], Step [0060/0081], loss: 0.0936, cons_kl: 0.00312, |g_cons|/|g_sup|: 0.085, cos: +0.636, up: 0.5663
+2026-10-24 01:34:25.259396 Epoch [088/100], Step [0080/0081], loss: 0.0943, cons_kl: 0.00313, |g_cons|/|g_sup|: 0.085, cos: +0.636, up: 0.5790
+2026-10-24 01:34:26.503993 Epoch [088/100], Step [0081/0081], loss: 0.0952, cons_kl: 0.00336, |g_cons|/|g_sup|: 0.085, cos: +0.636, up: 0.5813
+CVC-300 :  0.8762866666666667
+CVC-ClinicDB :  0.9314693548387096
+Kvasir :  0.9228230000000001
+CVC-ColonDB :  0.7990042105263148
+ETIS-LaribPolypDB :  0.7824714285714289
+mean:  0.8624109321206239
+2026-10-24 01:35:46.898288 Epoch [089/100], Step [0020/0081], loss: 0.0981, cons_kl: 0.00301, |g_cons|/|g_sup|: 0.085, cos: +0.636, up: 0.5893
+2026-10-24 01:36:16.891307 Epoch [089/100], Step [0040/0081], loss: 0.0958, cons_kl: 0.00308, |g_cons|/|g_sup|: 0.073, cos: +0.583, up: 0.5793
+2026-10-24 01:36:46.843036 Epoch [089/100], Step [0060/0081], loss: 0.0949, cons_kl: 0.00312, |g_cons|/|g_sup|: 0.073, cos: +0.583, up: 0.5746
+2026-10-24 01:37:16.867617 Epoch [089/100], Step [0080/0081], loss: 0.0958, cons_kl: 0.00290, |g_cons|/|g_sup|: 0.074, cos: +0.464, up: 0.5900
+2026-10-24 01:37:18.104699 Epoch [089/100], Step [0081/0081], loss: 0.0958, cons_kl: 0.00289, |g_cons|/|g_sup|: 0.074, cos: +0.464, up: 0.5872
+CVC-300 :  0.8645750000000002
+CVC-ClinicDB :  0.9232112903225805
+Kvasir :  0.9258890000000004
+CVC-ColonDB :  0.7930868421052627
+ETIS-LaribPolypDB :  0.7813142857142861
+mean:  0.857615283628426
+2026-10-24 01:38:38.022737 Epoch [090/100], Step [0020/0081], loss: 0.0972, cons_kl: 0.00302, |g_cons|/|g_sup|: 0.074, cos: +0.464, up: 0.5934
+2026-10-24 01:39:07.902740 Epoch [090/100], Step [0040/0081], loss: 0.0967, cons_kl: 0.00304, |g_cons|/|g_sup|: 0.074, cos: +0.464, up: 0.5907
+2026-10-24 01:39:38.100399 Epoch [090/100], Step [0060/0081], loss: 0.0966, cons_kl: 0.00296, |g_cons|/|g_sup|: 0.061, cos: +0.566, up: 0.5903
+2026-10-24 01:40:07.958841 Epoch [090/100], Step [0080/0081], loss: 0.0961, cons_kl: 0.00300, |g_cons|/|g_sup|: 0.061, cos: +0.566, up: 0.5704
+2026-10-24 01:40:09.192513 Epoch [090/100], Step [0081/0081], loss: 0.0960, cons_kl: 0.00295, |g_cons|/|g_sup|: 0.061, cos: +0.566, up: 0.5748
+CVC-300 :  0.8715099999999999
+CVC-ClinicDB :  0.9241322580645164
+Kvasir :  0.9296110000000003
+CVC-ColonDB :  0.8008734210526316
+ETIS-LaribPolypDB :  0.7812775510204081
+mean:  0.8614808460275112
+2026-10-24 01:41:29.245564 Epoch [091/100], Step [0020/0081], loss: 0.0953, cons_kl: 0.00314, |g_cons|/|g_sup|: 0.070, cos: +0.483, up: 0.5798
+2026-10-24 01:41:59.079928 Epoch [091/100], Step [0040/0081], loss: 0.0949, cons_kl: 0.00301, |g_cons|/|g_sup|: 0.070, cos: +0.483, up: 0.5729
+2026-10-24 01:42:29.193758 Epoch [091/100], Step [0060/0081], loss: 0.0958, cons_kl: 0.00302, |g_cons|/|g_sup|: 0.081, cos: +0.440, up: 0.5841
+2026-10-24 01:42:59.105714 Epoch [091/100], Step [0080/0081], loss: 0.0968, cons_kl: 0.00323, |g_cons|/|g_sup|: 0.081, cos: +0.440, up: 0.5838
+2026-10-24 01:43:00.341848 Epoch [091/100], Step [0081/0081], loss: 0.0968, cons_kl: 0.00319, |g_cons|/|g_sup|: 0.081, cos: +0.440, up: 0.5818
+CVC-300 :  0.8632749999999998
+CVC-ClinicDB :  0.9266612903225809
+Kvasir :  0.927844
+CVC-ColonDB :  0.7997736842105266
+ETIS-LaribPolypDB :  0.773022959183674
+mean:  0.8581153867433562
+2026-10-24 01:44:20.278423 Epoch [092/100], Step [0020/0081], loss: 0.0948, cons_kl: 0.00306, |g_cons|/|g_sup|: 0.081, cos: +0.440, up: 0.5809
+2026-10-24 01:44:50.358315 Epoch [092/100], Step [0040/0081], loss: 0.0974, cons_kl: 0.00299, |g_cons|/|g_sup|: 0.033, cos: +0.625, up: 0.5885
+2026-10-24 01:45:20.409652 Epoch [092/100], Step [0060/0081], loss: 0.0981, cons_kl: 0.00310, |g_cons|/|g_sup|: 0.033, cos: +0.625, up: 0.5694
+2026-10-24 01:45:50.406790 Epoch [092/100], Step [0080/0081], loss: 0.0944, cons_kl: 0.00301, |g_cons|/|g_sup|: 0.070, cos: +0.500, up: 0.5710
+2026-10-24 01:45:51.639193 Epoch [092/100], Step [0081/0081], loss: 0.0939, cons_kl: 0.00292, |g_cons|/|g_sup|: 0.070, cos: +0.500, up: 0.5733
+CVC-300 :  0.8698716666666666
+CVC-ClinicDB :  0.9242338709677415
+Kvasir :  0.9266310000000004
+CVC-ColonDB :  0.8040905263157904
+ETIS-LaribPolypDB :  0.7811306122448982
+mean:  0.8611915352390195
+2026-10-24 01:47:11.547874 Epoch [093/100], Step [0020/0081], loss: 0.0961, cons_kl: 0.00300, |g_cons|/|g_sup|: 0.070, cos: +0.500, up: 0.5849
+2026-10-24 01:47:41.585598 Epoch [093/100], Step [0040/0081], loss: 0.0960, cons_kl: 0.00316, |g_cons|/|g_sup|: 0.070, cos: +0.500, up: 0.5858
+2026-10-24 01:48:11.727392 Epoch [093/100], Step [0060/0081], loss: 0.0956, cons_kl: 0.00292, |g_cons|/|g_sup|: 0.071, cos: +0.469, up: 0.5800
+2026-10-24 01:48:41.559871 Epoch [093/100], Step [0080/0081], loss: 0.0957, cons_kl: 0.00334, |g_cons|/|g_sup|: 0.071, cos: +0.469, up: 0.5757
+2026-10-24 01:48:42.782701 Epoch [093/100], Step [0081/0081], loss: 0.0962, cons_kl: 0.00337, |g_cons|/|g_sup|: 0.071, cos: +0.469, up: 0.5778
+CVC-300 :  0.8653066666666669
+CVC-ClinicDB :  0.9311725806451612
+Kvasir :  0.9219360000000001
+CVC-ColonDB :  0.7873499999999998
+ETIS-LaribPolypDB :  0.801791836734694
+mean:  0.8615114168093043
+2026-10-24 01:50:02.940414 Epoch [094/100], Step [0020/0081], loss: 0.0974, cons_kl: 0.00302, |g_cons|/|g_sup|: 0.052, cos: +0.539, up: 0.5833
+2026-10-24 01:50:32.840573 Epoch [094/100], Step [0040/0081], loss: 0.0983, cons_kl: 0.00335, |g_cons|/|g_sup|: 0.052, cos: +0.539, up: 0.5755
+2026-10-24 01:51:02.796791 Epoch [094/100], Step [0060/0081], loss: 0.0964, cons_kl: 0.00315, |g_cons|/|g_sup|: 0.052, cos: +0.539, up: 0.5795
+2026-10-24 01:51:32.869684 Epoch [094/100], Step [0080/0081], loss: 0.0936, cons_kl: 0.00336, |g_cons|/|g_sup|: 0.105, cos: +0.576, up: 0.5917
+2026-10-24 01:51:34.114971 Epoch [094/100], Step [0081/0081], loss: 0.0938, cons_kl: 0.00328, |g_cons|/|g_sup|: 0.105, cos: +0.576, up: 0.5863
+CVC-300 :  0.875705
+CVC-ClinicDB :  0.9230467741935483
+Kvasir :  0.9142689999999998
+CVC-ColonDB :  0.8035844736842103
+ETIS-LaribPolypDB :  0.8016729591836738
+mean:  0.8636556414122865
+2026-10-24 01:52:54.141240 Epoch [095/100], Step [0020/0081], loss: 0.1391, cons_kl: 0.01391, |g_cons|/|g_sup|: 0.105, cos: +0.576, up: 0.5866
+2026-10-24 01:53:24.196166 Epoch [095/100], Step [0040/0081], loss: 0.1465, cons_kl: 0.00944, |g_cons|/|g_sup|: 0.367, cos: +0.876, up: 0.5855
+2026-10-24 01:53:54.234635 Epoch [095/100], Step [0060/0081], loss: 0.1403, cons_kl: 0.00638, |g_cons|/|g_sup|: 0.367, cos: +0.876, up: 0.5796
+2026-10-24 01:54:24.178001 Epoch [095/100], Step [0080/0081], loss: 0.1504, cons_kl: 0.01885, |g_cons|/|g_sup|: 0.367, cos: +0.876, up: 0.5921
+2026-10-24 01:54:25.425745 Epoch [095/100], Step [0081/0081], loss: 0.1516, cons_kl: 0.01953, |g_cons|/|g_sup|: 0.367, cos: +0.876, up: 0.5870
+CVC-300 :  0.8612683333333335
+CVC-ClinicDB :  0.9117612903225808
+Kvasir :  0.9017339999999998
+CVC-ColonDB :  0.754378684210526
+ETIS-LaribPolypDB :  0.7680545918367352
+mean:  0.839439379940635
+2026-10-24 01:55:45.688722 Epoch [096/100], Step [0020/0081], loss: 0.1487, cons_kl: 0.01014, |g_cons|/|g_sup|: 0.155, cos: +0.626, up: 0.5957
+2026-10-24 01:56:15.713457 Epoch [096/100], Step [0040/0081], loss: 0.1415, cons_kl: 0.01291, |g_cons|/|g_sup|: 0.155, cos: +0.626, up: 0.5860
+2026-10-24 01:56:46.023845 Epoch [096/100], Step [0060/0081], loss: 0.1302, cons_kl: 0.00574, |g_cons|/|g_sup|: 0.085, cos: +0.565, up: 0.5864
+2026-10-24 01:57:16.063439 Epoch [096/100], Step [0080/0081], loss: 0.1337, cons_kl: 0.01380, |g_cons|/|g_sup|: 0.085, cos: +0.565, up: 0.5764
+2026-10-24 01:57:17.312153 Epoch [096/100], Step [0081/0081], loss: 0.1343, cons_kl: 0.01370, |g_cons|/|g_sup|: 0.085, cos: +0.565, up: 0.5794
+CVC-300 :  0.8547966666666669
+CVC-ClinicDB :  0.9165387096774195
+Kvasir :  0.9037430000000001
+CVC-ColonDB :  0.7638015789473677
+ETIS-LaribPolypDB :  0.7138964285714285
+mean:  0.8305552767725765
+2026-10-24 01:58:37.674585 Epoch [097/100], Step [0020/0081], loss: 0.1387, cons_kl: 0.00697, |g_cons|/|g_sup|: 0.085, cos: +0.565, up: 0.6000
+2026-10-24 01:59:07.848735 Epoch [097/100], Step [0040/0081], loss: 0.1276, cons_kl: 0.00556, |g_cons|/|g_sup|: 0.112, cos: +0.414, up: 0.5746
+2026-10-24 01:59:37.973732 Epoch [097/100], Step [0060/0081], loss: 0.1125, cons_kl: 0.00471, |g_cons|/|g_sup|: 0.112, cos: +0.414, up: 0.5859
+2026-10-24 02:00:08.042552 Epoch [097/100], Step [0080/0081], loss: 0.1059, cons_kl: 0.00423, |g_cons|/|g_sup|: 0.074, cos: +0.607, up: 0.5949
+2026-10-24 02:00:09.269467 Epoch [097/100], Step [0081/0081], loss: 0.1060, cons_kl: 0.00394, |g_cons|/|g_sup|: 0.074, cos: +0.607, up: 0.5971
+CVC-300 :  0.8615583333333332
+CVC-ClinicDB :  0.9238096774193548
+Kvasir :  0.917138
+CVC-ColonDB :  0.7873834210526323
+ETIS-LaribPolypDB :  0.7703071428571429
+mean:  0.8520393149324926
+2026-10-24 02:01:29.810210 Epoch [098/100], Step [0020/0081], loss: 0.0975, cons_kl: 0.00345, |g_cons|/|g_sup|: 0.074, cos: +0.607, up: 0.5986
+2026-10-24 02:01:59.783579 Epoch [098/100], Step [0040/0081], loss: 0.0969, cons_kl: 0.00361, |g_cons|/|g_sup|: 0.074, cos: +0.607, up: 0.5962
+2026-10-24 02:02:29.927586 Epoch [098/100], Step [0060/0081], loss: 0.0955, cons_kl: 0.00343, |g_cons|/|g_sup|: 0.067, cos: +0.472, up: 0.5819
+2026-10-24 02:02:59.795059 Epoch [098/100], Step [0080/0081], loss: 0.0940, cons_kl: 0.00335, |g_cons|/|g_sup|: 0.067, cos: +0.472, up: 0.5881
+2026-10-24 02:03:01.029200 Epoch [098/100], Step [0081/0081], loss: 0.0935, cons_kl: 0.00325, |g_cons|/|g_sup|: 0.067, cos: +0.472, up: 0.5861
+CVC-300 :  0.8706416666666663
+CVC-ClinicDB :  0.927116129032258
+Kvasir :  0.9199229999999998
+CVC-ColonDB :  0.7929105263157888
+ETIS-LaribPolypDB :  0.7802755102040818
+mean:  0.858173366443759
+2026-10-24 02:04:21.421736 Epoch [099/100], Step [0020/0081], loss: 0.0907, cons_kl: 0.00328, |g_cons|/|g_sup|: 0.101, cos: +0.528, up: 0.5903
+2026-10-24 02:04:51.400028 Epoch [099/100], Step [0040/0081], loss: 0.0921, cons_kl: 0.00304, |g_cons|/|g_sup|: 0.101, cos: +0.528, up: 0.5864
+2026-10-24 02:05:21.441882 Epoch [099/100], Step [0060/0081], loss: 0.0903, cons_kl: 0.00301, |g_cons|/|g_sup|: 0.101, cos: +0.528, up: 0.5819
+2026-10-24 02:05:51.585193 Epoch [099/100], Step [0080/0081], loss: 0.0880, cons_kl: 0.00318, |g_cons|/|g_sup|: 0.077, cos: +0.620, up: 0.5940
+2026-10-24 02:05:52.840132 Epoch [099/100], Step [0081/0081], loss: 0.0884, cons_kl: 0.00308, |g_cons|/|g_sup|: 0.077, cos: +0.620, up: 0.5836
+CVC-300 :  0.8713949999999999
+CVC-ClinicDB :  0.9291645161290322
+Kvasir :  0.9183609999999999
+CVC-ColonDB :  0.7924368421052634
+ETIS-LaribPolypDB :  0.7906821428571428
+mean:  0.8604079002182876
