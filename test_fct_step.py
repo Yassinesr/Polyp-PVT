@@ -80,13 +80,13 @@ def rel(g1, g2):
     return float(num / den)
 
 model = Toy()
-cases = [('FCT (lag-or-margin + upright pull)', opt(), dict()),
-         ('upright pull only (--fct_flip_pull 0)', opt(fct_flip_pull=0), dict(flip_pull=False)),
-         ('lag-or-margin, no upright pull', opt(fct_up=0), dict(up=False)),
-         ('unweighted flip pulls + upright pull', opt(fct_weit=0), dict(weight='none')),
+cases = [('FCT (both pulls, lag-or-margin)', opt(), dict()),
+         ('pull to the best flip only (--fct_flip_pull 0)', opt(fct_flip_pull=0), dict(flip_pull=False)),
+         ('pull to the upright only, lag-or-margin', opt(fct_up=0), dict(up=False)),
+         ('both pulls, unweighted', opt(fct_weit=0), dict(weight='none')),
          ('a = 0.5', opt(fct_lm_a=0.5), dict(a=0.5)),
-         ('lag-only gate + upright pull (--fct_weit 5)', opt(fct_weit=5), dict(weight='lag')),
-         ('confidence-graded, no upright pull (6)', opt(fct_weit=6, fct_up=0), dict(weight='graded', up=False))]
+         ('both pulls, lag-only gate (--fct_weit 5)', opt(fct_weit=5), dict(weight='lag')),
+         ('pull to the upright only, graded (6)', opt(fct_weit=6, fct_up=0), dict(weight='graded', up=False))]
 ok = True
 for name, o, kw in cases:
     r = rel(grads_from_step(model, o), grads_reference(model, **kw))
@@ -106,12 +106,12 @@ print('%-42s relative gradient difference %.2e' % ('three supervised views (lamb
 # still match a reference with the same bug in neither, so compare the step with itself.
 g_none = g_step                                                             # three views, lambda = 0
 g_fct = grads_from_step(model, opt())                                       # FCT
-g_up = grads_from_step(model, opt(fct_flip_pull=0))                         # upright pull only
-g_flip = grads_from_step(model, opt(fct_up=0))                              # flip pulls only
-moves = [('the upright pull (upright-only vs no pull)', rel(g_up, g_none)),
-         ('the flip pulls (flip-only vs no pull)', rel(g_flip, g_none)),
-         ('the flip pulls on top of the upright pull (FCT vs upright-only)', rel(g_fct, g_up)),
-         ('the upright pull on top of the flip pulls (FCT vs flip-only)', rel(g_fct, g_flip))]
+g_up = grads_from_step(model, opt(fct_flip_pull=0))                         # pull to the best flip only
+g_flip = grads_from_step(model, opt(fct_up=0))                              # pull to the upright only
+moves = [('the pull to the best flip (alone vs no pull)', rel(g_up, g_none)),
+         ('the pull to the upright (alone vs no pull)', rel(g_flip, g_none)),
+         ('the pull to the upright, on top of the pull to the best flip', rel(g_fct, g_up)),
+         ('the pull to the best flip, on top of the pull to the upright', rel(g_fct, g_flip))]
 for name, r_ in moves:
     print('moves the gradient: %-62s %.2e' % (name, r_))
     ok &= r_ > 1e-3

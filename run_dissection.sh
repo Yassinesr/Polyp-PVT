@@ -4,9 +4,9 @@
 # =============================================================================
 #   1. s3              the three views supervised, no pull, seeds 1-6. s3 - vanilla is the gain of
 #                      deterministic flip augmentation alone; nothing else can be read without it.
-#   2. s3up            the three views and the upright pull alone, seeds 1-6. With s3, s3lm and
-#                      s3lmup (both already run) it decomposes FCT into the views, the upright pull
-#                      and the flip pulls.
+#   2. s3up            the three views and the pull to the best flipped view alone, seeds 1-6. With
+#                      s3, s3lm and s3lmup (both already run) it decomposes FCT into the views, the
+#                      pull to the best flipped view and the pull to the upright view.
 #   3. s3fup s3relup   FCT with w = 1 and FCT with the lag gate only (a -> infinity): ablations of
 #                      the weight function, seeds 1-3 first. Extend them to six seeds
 #                      (stage "extend") only if they land near s3lmup.

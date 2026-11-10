@@ -273,7 +273,7 @@ Computed here with seed_summary.py's statistics from the 4-decimal per-run score
 (S3LM's from seeds_s3lm.out), so a last digit can differ by 1 from its own output:
 
 ```
-difference = S3UP - PVT_VANILLA with the same seed: the three views and the upright pull, against vanilla
+difference = S3UP - PVT_VANILLA with the same seed: the three views and the pull to the best flipped view, against vanilla
 set          diff              95% CI p paired  p perm   seeds won
 Kvasir    +0.0048 [ -0.0050,  +0.0147]    0.264   0.175       5/6
 ClinicDB  -0.0020 [ -0.0127,  +0.0087]    0.653   0.600       4/6
@@ -282,7 +282,7 @@ CVC-300   +0.0009 [ -0.0098,  +0.0116]    0.838   0.844       3/6
 ETIS      +0.0105 [ +0.0025,  +0.0184]    0.019   0.004       6/6
 mean      +0.0028 [ -0.0004,  +0.0059]    0.074   0.078       5/6
 
-difference = S3LMUP - S3UP with the same seed: the flip pulls, on top of the upright pull
+difference = S3LMUP - S3UP with the same seed: the pull to the upright view, on top of the pull to the best flipped view
 set          diff              95% CI p paired  p perm   seeds won
 Kvasir    +0.0008 [ -0.0053,  +0.0069]    0.750   0.790       3/6
 ClinicDB  +0.0038 [ -0.0045,  +0.0122]    0.288   0.221       4/6
@@ -291,7 +291,7 @@ CVC-300   -0.0003 [ -0.0092,  +0.0086]    0.934   0.961       4/6
 ETIS      +0.0060 [ -0.0055,  +0.0176]    0.239   0.221       4/6
 mean      +0.0024 [ -0.0024,  +0.0073]    0.254   0.212       3/6
 
-difference = S3LM - S3 with the same seed: the flip pulls alone, on top of the three views
+difference = S3LM - S3 with the same seed: the pull to the upright view alone, on top of the three views
 set          diff              95% CI p paired  p perm   seeds won
 Kvasir    +0.0005 [ -0.0077,  +0.0088]    0.878   0.855       3/6
 ClinicDB  +0.0035 [ -0.0057,  +0.0126]    0.376   0.364       4/6
@@ -300,7 +300,7 @@ CVC-300   +0.0011 [ -0.0086,  +0.0108]    0.788   0.762       3/6
 ETIS      +0.0049 [ -0.0124,  +0.0221]    0.502   0.513       2/6
 mean      +0.0010 [ -0.0045,  +0.0066]    0.652   0.619       3/6
 
-difference = S3LMUP - S3LM with the same seed: the upright pull, on top of the flip pulls
+difference = S3LMUP - S3LM with the same seed: the pull to the best flipped view, on top of the pull to the upright view
 set          diff              95% CI p paired  p perm   seeds won
 Kvasir    +0.0016 [ -0.0059,  +0.0091]    0.606   0.545       3/6
 ClinicDB  +0.0032 [ -0.0051,  +0.0114]    0.371   0.372       4/6
@@ -310,9 +310,16 @@ ETIS      -0.0032 [ -0.0167,  +0.0103]    0.569   0.405       2/6
 mean      +0.0005 [ -0.0037,  +0.0047]    0.764   0.812       3/6
 ```
 
-Reading. The upright pull alone adds nothing to the three views (S3UP - S3: -0.0009, n.s.). Neither
-pull on its own separates from the views (flip pulls +0.0010, n.s.), nor does either one on top of
-the other (flip pulls +0.0024, upright pull +0.0005, both n.s.). FCT, with both, has the highest
+Terms. Pull to the upright view: the flipped views move toward the upright view's prediction, fully
+where the upright view is more accurate, partly where it is less accurate but still right, not at all
+where it is wrong (lag-or-margin, a = 2). Pull to the best flipped view: the upright view moves toward
+the flipped view closest to the label, where that view is more accurate. In the code and run names:
+flip pulls (--fct_flip_pull) and the upright pull (--fct_up, the UP in S3UP and S3LMUP).
+
+Reading. The pull to the best flipped view alone adds nothing to the three views (S3UP - S3: -0.0009,
+n.s.). Neither pull on its own separates from the views (pull to the upright view +0.0010, n.s.), nor
+does either one on top of the other (pull to the upright view +0.0024, pull to the best flipped view
++0.0005, both n.s.). FCT, with both, has the highest
 five-set mean of the ladder. It is also the only arm of the ladder whose five-set gain over vanilla
 has a 95% interval above 0: +0.0052, p 0.016, 6/6 seeds (section PVT_VANILLA -> S3LMUP above).
 S3LM comes closest: +0.0047, interval [-0.0002, +0.0096], p 0.058 (seeds_s3lm.out).

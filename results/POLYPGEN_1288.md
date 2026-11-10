@@ -149,7 +149,7 @@ PG-C5     +0.0242 [ -0.0003,  +0.0488]    0.052   0.043       5/6
 PG-C6     +0.0144 [ +0.0042,  +0.0246]    0.015   0.009       6/6
 pooled    +0.0086 [ +0.0037,  +0.0134]    0.006   0.002       6/6
 
-difference = S3LM - S3 with the same seed: the flip pulls, on top of the three supervised views
+difference = S3LM - S3 with the same seed: the pull to the upright view, on top of the three supervised views
 set          diff              95% CI p paired  p perm   seeds won
 PG-C1     +0.0058 [ -0.0058,  +0.0174]    0.254   0.145       5/6
 PG-C2     +0.0016 [ -0.0044,  +0.0075]    0.529   0.589       2/6
@@ -159,7 +159,7 @@ PG-C5     +0.0128 [ -0.0091,  +0.0346]    0.193   0.156       5/6
 PG-C6     +0.0026 [ -0.0029,  +0.0081]    0.274   0.537       4/6
 pooled    +0.0049 [ -0.0023,  +0.0121]    0.139   0.048       5/6
 
-difference = S3LMUP - S3LM with the same seed: the upright pull, on top of the flip pulls
+difference = S3LMUP - S3LM with the same seed: the pull to the best flipped view, on top of the pull to the upright view
 set          diff              95% CI p paired  p perm   seeds won
 PG-C1     -0.0013 [ -0.0063,  +0.0038]    0.552   0.593       2/6
 PG-C2     -0.0013 [ -0.0089,  +0.0064]    0.686   0.686       3/6
@@ -185,10 +185,10 @@ pooled    +0.0036 [ -0.0040,  +0.0112]    0.282   0.234       3/6
 - Every arm with a consistency term improves pooled PolypGen on all six seeds, from +0.0081 to
   +0.0100, every 95% interval above 0. The three supervised views alone (S3) give +0.0050, with
   an interval that includes 0.
-- The flip pulls on top of the views (S3LM - S3): +0.0049 pooled, up on five centres (C3 +0.0000)
+- The pull to the upright view on top of the views (S3LM - S3): +0.0049 pooled, up on five centres (C3 +0.0000)
   and on 5/6 seeds. Not significant: paired p 0.139, permutation p 0.048.
-- The upright pull adds nothing here (S3LMUP - S3LM: pooled -0.0014, n.s.). The margin factor
+- The pull to the best flipped view adds nothing here (S3LMUP - S3LM: pooled -0.0014, n.s.). The margin factor
   a does not matter either: pooled +0.0087 / +0.0100 / +0.0081 / +0.0086 for a = 0.5 / 1 / 1.5 / 2.
-- C2 is below vanilla for every arm: -0.0042 with the views alone, -0.0026 with the flip pulls,
+- C2 is below vanilla for every arm: -0.0042 with the views alone, -0.0026 with the pull to the upright view,
   -0.0008 to -0.0039 across a. No interval excludes 0. With six seeds, C2's 95% interval is
   about +-0.006 wide, so differences of this size cannot be told from noise.

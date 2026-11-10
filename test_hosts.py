@@ -62,7 +62,8 @@ def sam2unet_structure_loss(pred, mask):
 
 
 def fct_reference(model, x, gts, lam, prediction, sup, a=2.0):
-    """Eqs. (7)-(11) written from the paper (lag-or-margin flip pulls and the upright pull),
+    """Eqs. (7)-(11) written from the paper (the pull to the upright view, lag-or-margin, and the
+    pull to the best flipped view),
     for a host whose prediction is `prediction(heads)` and whose loss is `sup(heads, gts)`.
     Returns the gradients of the trainable parameters."""
     model.zero_grad()

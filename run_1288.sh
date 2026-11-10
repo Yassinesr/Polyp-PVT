@@ -37,11 +37,12 @@
 #  s3lmup        s3lm, and the upright view also learns from the flips: where the flip
 #                closest to the label beats the upright view, the upright is pulled toward
 #                that flip (--fct_up 1). No new setting; about 30% slower per step.
-#  s3fup         FCT without its weight: s3lmup with w = 1 on the flip pulls (--fct_weit 0)
+#  s3fup         FCT without its weight: s3lmup with the flipped views pulled to the upright view at
+#                every pixel, w = 1 (--fct_weit 0)
 #  s3relup       FCT without the margin: w = 1 where the flipped view lags, 0 where it leads
 #                (--fct_weit 5, the a -> infinity end of the sweep)
-#  s3up          FCT without the flip pulls: the three views supervised and only the upright
-#                pull (--fct_flip_pull 0)
+#  s3up          FCT without the pull to the upright view: the three views supervised, and only the
+#                pull of the upright view to the best flipped view (--fct_flip_pull 0)
 #                The component dissection runs these in order of what they answer, test first:
 #                  GPU=1 nohup bash run_dissection.sh > dissection.out 2>&1 &
 #  s3lmup_a05    the sweep of lag-or-margin's factor: s3lmup with w = max(0, 1 - a|p_o - y|)
