@@ -16,16 +16,24 @@ host and the vanilla arm keeps each paper's loss.
              loss: its structure, edge-Dice and uncertainty terms; its own data loader
              (with edges and augmentation) and learning-rate schedule, as in its
              Train_PS_R_PVTV3_edge1_new1.py.
+  sam2unet   SAM2-UNet on SAM2's Hiera-L (Xiong et al., Visual Intelligence 2026): the
+             encoder frozen with adapters, a U-Net decoder. Three maps; prediction: the
+             first, as in its test.py; loss: the structure loss on each, as in its
+             train.py; its own data loader (random horizontal and vertical flips) and
+             cosine schedule. The paper's polyp recipe: AdamW 1e-3, weight decay 5e-4,
+             batch 12, 20 epochs, scales {1, 1.25} (run_1288.sh sets these).
 
 No code from these papers is copied here: --host_root points at your own clone, and the
-model (and ASGNet's data loader) is imported from it unchanged; setup_hosts.sh clones
-each at the commit this was tested on.
+model (and ASGNet's and SAM2-UNet's data loaders) is imported from it unchanged;
+setup_hosts.sh clones each at the commit this was tested on.
 
   python hosts.py        # build each host and run one forward (on the GPU if there is one)
 """
 import os
 import sys
+import math
 import argparse
+import functools
 import importlib
 import subprocess
 
@@ -34,10 +42,14 @@ import torch
 import torch.nn.functional as F
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_CLASH = ('lib', 'utils')            # package names the hosts share with this repo
-ROOTS = {'pranetv2': '../PraNet-V2/binary_seg', 'asgnet': '../ASGNet/ASGNet_26_TCSVT'}
+# Module names the hosts share with this repo: its packages lib and utils, and its data
+# folder dataset (SAM2-UNet keeps its loader in dataset.py).
+_CLASH = ('lib', 'utils', 'dataset')
+ROOTS = {'pranetv2': '../PraNet-V2/binary_seg', 'asgnet': '../ASGNet/ASGNet_26_TCSVT',
+         'sam2unet': '../SAM2-UNet'}
 COMMITS = {'pranetv2': 'ca08522ae77cbda6c5056609e7951b502dbb08f2',
-           'asgnet': '97c4e746e94bb6a184a14775b771226eed88c3e2'}
+           'asgnet': '97c4e746e94bb6a184a14775b771226eed88c3e2',
+           'sam2unet': '01598e5e9912ffb23f965ecbebf4d1dfecbaa56e'}
 
 
 def _boundary_weight(mask):
@@ -328,7 +340,101 @@ class ASGNetHost(PolypPVTHost):
                                         '(setup_hosts.sh does)'.format(d, n_edge, n_img))
 
 
-HOSTS = {h.name: h for h in (PolypPVTHost, PraNetV2Host, ASGNetHost)}
+class _Pairs(torch.utils.data.Dataset):
+    """A dataset of {'image', 'label'} dicts (SAM2-UNet's) served as (image, mask) pairs,
+    the order Train_noaug.py unpacks."""
+
+    def __init__(self, ds):
+        self.ds = ds
+
+    def __len__(self):
+        return len(self.ds)
+
+    def __getitem__(self, i):
+        d = self.ds[i]
+        return d['image'], d['label']
+
+
+class SAM2UNetHost(PolypPVTHost):
+    """SAM2-UNet (SAM2's Hiera-L, frozen, with an adapter in each block): maps out, out1,
+    out2, all at the input size; out is the prediction (its test.py); loss: the structure
+    loss on each, summed, as in its train.py (the inherited sup_loss).
+
+    Its train.py: AdamW 1e-3, weight decay 5e-4, batch 12, 20 epochs, cosine decay to 1e-7
+    stepped once per epoch, no gradient clipping, full precision, its FullDataset (resize,
+    random horizontal and vertical flips). Its paper adds, for polyps, multi-scale training
+    at {1, 1.25}. Hiera-L is built without stochastic depth.
+    """
+    name, paper = 'sam2unet', 'SAM2-UNet, SAM2 Hiera-L (Xiong et al., Visual Intelligence 2026)'
+    weights = './pretrained_pth/sam2_hiera_large.pt'   # SAM2 (not SAM2.1) Hiera-L, as its README asks
+    module = 'SAM2UNet.py'
+    loader_note = ("SAM2-UNet's own loader (its dataset.py FullDataset): resize to --trainsize, "
+                   "random horizontal and vertical flips (p = 0.5 each)")
+    lr_note = ('CosineAnnealingLR(T_max = the epochs run, eta_min=1e-7), stepped once per epoch, '
+               'as in its train.py')
+
+    def build(self):
+        # Its sam2 package builds the model through hydra from the sam2_configs package;
+        # import that while the clone is on the path, so hydra still finds it afterwards.
+        _import_from(self.root, 'sam2_configs')
+        mod = _import_from(self.root, 'SAM2UNet')
+        build_sam2 = mod.build_sam2
+        # build_sam2 moves the model to 'cuda' unless told otherwise: build it on the CPU
+        # when there is no GPU (the CPU test); Train_noaug.py moves it to the GPU anyway.
+        mod.build_sam2 = functools.partial(
+            build_sam2, device='cuda' if torch.cuda.is_available() else 'cpu')
+        try:
+            # Without the SAM2 weights (inference, which loads a trained checkpoint over the
+            # whole model, or the CPU test) the encoder starts random; preflight() stops a
+            # training run that would start that way.
+            return mod.SAM2UNet(self.weights if os.path.isfile(self.weights) else None)
+        finally:
+            mod.build_sam2 = build_sam2
+
+    def logit(self, heads):
+        return heads[0]                                   # test.py: res, _, _ = model(image)
+
+    def set_drop_path(self, model, rate):
+        return None                                       # Hiera-L is built without stochastic depth
+
+    def train_loader(self, opt):
+        data = _import_from(self.root, 'dataset')
+        root = os.path.join(opt.train_path, '')
+        ds = data.FullDataset(root + 'images/', root + 'masks/', opt.trainsize, mode='train')
+        # FullDataset pairs images and masks by sorted position, not by name: make sure the
+        # two lists name the same images, or every pair would be silently wrong.
+        stem = lambda p: os.path.splitext(os.path.basename(p))[0]
+        if [stem(p) for p in ds.images] != [stem(p) for p in ds.gts]:
+            raise FileNotFoundError('{}images and {}masks do not hold the same file names, so '
+                                    "SAM2-UNet's loader would pair them wrongly".format(root, root))
+        return torch.utils.data.DataLoader(_Pairs(ds), batch_size=opt.batchsize, shuffle=True,
+                                           num_workers=8)       # as in its train.py
+
+    def lr_schedule(self, optimizer, opt):
+        # Its CosineAnnealingLR(optim, args.epoch, eta_min=1.0e-7), stepped after each epoch,
+        # in closed form: epoch e (1, 2, ...) trains at eta_min + (lr - eta_min)(1 + cos(pi (e - 1) / T)) / 2
+        # with T the number of epochs, here the epochs the loop runs (opt.epoch - 1).
+        base, eta_min, t_max = opt.lr, 1e-7, max(opt.epoch - 1, 1)
+
+        def at_epoch(epoch):
+            lr = eta_min + (base - eta_min) * (1 + math.cos(math.pi * (epoch - 1) / t_max)) / 2
+            for group in optimizer.param_groups:
+                group['lr'] = lr
+        return at_epoch
+
+    def preflight(self, opt=None):
+        super().preflight(opt)
+        try:
+            import hydra, omegaconf                     # noqa: F401  (its sam2 package needs them)
+        except ImportError:
+            raise ImportError('SAM2-UNet builds its model through hydra: pip install hydra-core==1.3.2 '
+                              '(setup_hosts.sh does)')
+        if tuple(int(v) for v in torch.__version__.split('+')[0].split('.')[:2]) < (2, 0):
+            raise RuntimeError('SAM2-UNet needs PyTorch >= 2.0 (its requirements.txt pins 2.4); '
+                               'this is ' + torch.__version__)
+
+
+HOSTS = {h.name: h for h in (PolypPVTHost, PraNetV2Host, ASGNetHost, SAM2UNetHost)}
 
 
 def get_host(name='polyppvt', root=None):
@@ -341,7 +447,8 @@ def get_host(name='polyppvt', root=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Build each host and run one forward (on the GPU '
                                                  'if there is one), to check a setup before a long run.')
-    parser.add_argument('--hosts', nargs='+', default=['pranetv2', 'asgnet'], choices=sorted(HOSTS))
+    parser.add_argument('--hosts', nargs='+', default=['pranetv2', 'asgnet', 'sam2unet'],
+                        choices=sorted(HOSTS))
     for _name, _root in ROOTS.items():
         parser.add_argument('--{}_root'.format(_name), default=_root)
     opt = parser.parse_args()

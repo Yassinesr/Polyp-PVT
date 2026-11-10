@@ -537,7 +537,7 @@ def train(train_loader, model, optimizer, epoch, opt, state):
     model.train()
     v2 = _fct_v2(opt)
     scaler = state.get('scaler')
-    size_rates = [0.75, 1, 1.25] if opt.multiscale else [1]
+    size_rates = opt.size_rates or ([0.75, 1, 1.25] if opt.multiscale else [1])
     loss_record = AvgMeter()
     cons_record = AvgMeter()
 
@@ -642,11 +642,13 @@ def train(train_loader, model, optimizer, epoch, opt, state):
 
             if scaler is not None:
                 scaler.unscale_(optimizer)      # clip on real, unscaled grads
-                clip_gradient(optimizer, opt.clip)
+                if opt.clip > 0:
+                    clip_gradient(optimizer, opt.clip)
                 scaler.step(optimizer)
                 scaler.update()
             else:
-                clip_gradient(optimizer, opt.clip)
+                if opt.clip > 0:
+                    clip_gradient(optimizer, opt.clip)
                 optimizer.step()
             if state.get('ema') is not None:
                 _ema_update(state['ema'], model, opt.ema, state['ema_step'])
@@ -713,18 +715,23 @@ if __name__ == '__main__':
     parser.add_argument('--epoch', type=int, default=100)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--optimizer', type=str, default='AdamW',
-                        help='AdamW (weight decay 1e-4, the stock recipe), Adam (no weight '
-                             'decay, as in PraNet-V2) or anything else for SGD')
+                        help='AdamW (weight decay --weight_decay, 1e-4 in the stock recipe), Adam '
+                             '(no weight decay, as in PraNet-V2) or anything else for SGD')
+    parser.add_argument('--weight_decay', type=float, default=1e-4,
+                        help='weight decay of AdamW and SGD: 1e-4, the stock recipe; SAM2-UNet '
+                             'uses 5e-4. Adam has none')
     parser.add_argument('--host', type=str, default='polyppvt', choices=sorted(HOSTS),
                         help='the model to train: polyppvt (this repo), pranetv2 (PraNet-V2, '
-                             'Res2Net-50) or asgnet (ASGNet, PVTv2-b3), each with its paper\'s '
-                             'loss. See hosts.py')
+                             'Res2Net-50), asgnet (ASGNet, PVTv2-b3) or sam2unet (SAM2-UNet, '
+                             'Hiera-L), each with its paper\'s loss. See hosts.py')
     parser.add_argument('--host_root', type=str, default=None,
-                        help='your clone of the host\'s code (default ../PraNet-V2/binary_seg '
-                             'or ../ASGNet/ASGNet_26_TCSVT; setup_hosts.sh makes them)')
+                        help='your clone of the host\'s code (default ../PraNet-V2/binary_seg, '
+                             '../ASGNet/ASGNet_26_TCSVT or ../SAM2-UNet; setup_hosts.sh makes them)')
     parser.add_argument('--batchsize', type=int, default=16)
     parser.add_argument('--trainsize', type=int, default=352)
-    parser.add_argument('--clip', type=float, default=0.5)
+    parser.add_argument('--clip', type=float, default=0.5,
+                        help='clamp every gradient element to [-clip, clip] (stock 0.5); 0 = no '
+                             'clipping, as in SAM2-UNet\'s train.py')
     parser.add_argument('--decay_rate', type=float, default=0.1)
     parser.add_argument('--decay_epoch', type=int, default=50)
     parser.add_argument('--train_path', type=str, default='./dataset/TrainDataset/')
@@ -735,6 +742,10 @@ if __name__ == '__main__':
     # with FCT+TTA. On by default because it is part of the stock recipe.
     parser.add_argument('--multiscale', type=int, default=1,
                         help='1 = stock [0.75,1,1.25] multi-scale, 0 = single scale')
+    parser.add_argument('--size_rates', type=float, nargs='+', default=None,
+                        help='other multi-scale rates, in place of --multiscale; must include 1 '
+                             '(SAM2-UNet\'s polyp recipe: 1 1.25). Each rate is its own step, '
+                             'resized to round(trainsize * rate / 32) * 32 as in the stock loop')
 
     # Orientation augmentation. Off by default -- this script exists to remove
     # it. The flag is here for ONE purpose: testing whether the ~0.018 gap
@@ -875,6 +886,8 @@ if __name__ == '__main__':
         parser.error('--fct_lm_a only applies to the lag-or-margin weight (--fct_weit 8)')
     if opt.fct_lm_a < 0:
         parser.error('--fct_lm_a must be >= 0')
+    if opt.size_rates is not None and 1.0 not in opt.size_rates:
+        parser.error('--size_rates must include 1: the loss is logged and the FCT warmup counted there')
     if opt.fct_weit and not opt.fct_sup:
         print('!! --fct_weit without --fct_sup 1: the weight is built from the GT, so '
               'labels reach the otherwise unsupervised flipped views.')
@@ -916,11 +929,11 @@ if __name__ == '__main__':
 
     params = model.parameters()
     if opt.optimizer == 'AdamW':
-        optimizer = torch.optim.AdamW(params, opt.lr, weight_decay=1e-4)
+        optimizer = torch.optim.AdamW(params, opt.lr, weight_decay=opt.weight_decay)
     elif opt.optimizer == 'Adam':
         optimizer = torch.optim.Adam(params, opt.lr)
     else:
-        optimizer = torch.optim.SGD(params, opt.lr, weight_decay=1e-4, momentum=0.9)
+        optimizer = torch.optim.SGD(params, opt.lr, weight_decay=opt.weight_decay, momentum=0.9)
     print(optimizer)
 
     image_root = '{}/images/'.format(opt.train_path)
@@ -950,7 +963,11 @@ if __name__ == '__main__':
             print('  !! --orientation_aug with --fct: the augmentation supplies the very')
             print('     symmetry the consistency term constrains. Not an FCT measurement.')
         print('  photometric               : OFF  (this repo has none)')
-    print('  multi-scale [0.75,1,1.25] : {}'.format('ON' if opt.multiscale else 'OFF'))
+    if opt.size_rates:
+        print('  multi-scale rates         : {}  (--size_rates)'.format(
+            ' '.join('{:g}'.format(r) for r in opt.size_rates)))
+    else:
+        print('  multi-scale [0.75,1,1.25] : {}'.format('ON' if opt.multiscale else 'OFF'))
     if drop_path is None:
         print('  stochastic depth          : none in this model')
     else:
@@ -981,6 +998,8 @@ if __name__ == '__main__':
     lr_schedule = HOST.lr_schedule(optimizer, opt)
     print('  lr {} {}'.format(opt.lr, HOST.lr_note if lr_schedule else
                               'CONSTANT (no decay; --decay_rate/--decay_epoch are inert)'))
+    if opt.clip <= 0:
+        print('  gradient clipping: off (--clip {:g})'.format(opt.clip))
     if opt.fct and _fct_v2(opt):
         print('  FCT v2: flipped views supervised {}, consistency {} x {:.3f}{}, vflip {}, '
               'warmup {}, all scales {}, sub {}, grad_diag {}'.format(

@@ -56,6 +56,17 @@
 #                    GPU's batch norm saw 10 images, if your GPU fits it. Use one value for
 #                    both arms.
 #  asgnet_s3lmup     the same with FCT exactly as in s3lmup
+#  sam2unet_vanilla  SAM2-UNet on SAM2's Hiera-L (Visual Intelligence 2026), from SAM2UNET_ROOT
+#                    (default ../SAM2-UNet), with its own loss, data loader (random horizontal
+#                    and vertical flips) and schedule, and its paper's polyp recipe: AdamW 1e-3,
+#                    weight decay 5e-4, batch 12, 20 epochs (--epoch 21: the loop runs 20),
+#                    cosine to 1e-7, scales {1, 1.25}, no gradient clipping, full precision.
+#                    The batch runs as SAM2UNET_ACCUM parts with one step (default 2, parts of
+#                    6, for a 12 GB GPU); SAM2UNET_ACCUM=1 is its single-GPU batch, if your
+#                    GPU fits it. SAM2UNET_AMP=1 trains in mixed precision, about twice as
+#                    fast, where its train.py is full precision. Use one value of each for
+#                    both arms. A checkpoint is ~0.9 GB (best + last: ~1.8 GB per run).
+#  sam2unet_s3lmup   the same with FCT exactly as in s3lmup
 #                    Run setup_hosts.sh once before the host stages.
 #  gate          inference only: gate_share.py on existing checkpoints
 #
@@ -66,7 +77,7 @@
 #  Usage: bash run_1288.sh vanilla | vanilla_aug | s3 | s3f | s3fup | s3relup | s3up | s3err | s3gate | s3bgate | s3rel | s3sig
 #                          | s3sigy | s3lm | s3lmup | s3lmup_a05 | s3lmup_a10 | s3lmup_a15
 #                          | s3lmup_a30 | pranetv2_vanilla | pranetv2_s3lmup | asgnet_vanilla
-#                          | asgnet_s3lmup | gate
+#                          | asgnet_s3lmup | sam2unet_vanilla | sam2unet_s3lmup | gate
 #         SEED=1 bash run_1288.sh s3err
 #         bash run_1288.sh all            # = s3err
 # =============================================================================
@@ -139,6 +150,13 @@ asgnet_vanilla()   { HOSTARGS="$ASGNET"; train_arm ASGNET_VANILLA$SFX $HOSTARGS 
                        && infer_arm ASGNET_VANILLA$SFX PolypPVT; }
 asgnet_s3lmup()    { HOSTARGS="$ASGNET"; train_arm ASGNET_S3LMUP$SFX $HOSTARGS $ASGNET_RECIPE $FCT --fct_weit 8 --fct_up 1 \
                        && infer_arm ASGNET_S3LMUP$SFX PolypPVT; }
+SAM2UNET="--host sam2unet --host_root ${SAM2UNET_ROOT:-../SAM2-UNet}"
+SAM2UNET_RECIPE="--optimizer AdamW --lr 1e-3 --weight_decay 5e-4 --batchsize 12 --epoch 21 --size_rates 1 1.25 \
+                 --clip 0 --amp ${SAM2UNET_AMP:-0} --accum ${SAM2UNET_ACCUM:-2}"
+sam2unet_vanilla() { HOSTARGS="$SAM2UNET"; train_arm SAM2UNET_VANILLA$SFX $HOSTARGS $SAM2UNET_RECIPE \
+                       && infer_arm SAM2UNET_VANILLA$SFX PolypPVT; }
+sam2unet_s3lmup()  { HOSTARGS="$SAM2UNET"; train_arm SAM2UNET_S3LMUP$SFX $HOSTARGS $SAM2UNET_RECIPE $FCT --fct_weit 8 --fct_up 1 \
+                       && infer_arm SAM2UNET_S3LMUP$SFX PolypPVT; }
 gate()        { local ck=""; for a in S3F S3F_EMA S3W05 S3ERR; do [ -d "./model_pth/$a" ] && ck="$ck ./model_pth/$a"; done
                 python gate_share.py --pth_path $ck; }
 
@@ -166,6 +184,8 @@ case "$STAGE" in
   pranetv2_s3lmup)  pranetv2_s3lmup ;;
   asgnet_vanilla)   asgnet_vanilla ;;
   asgnet_s3lmup)    asgnet_s3lmup ;;
+  sam2unet_vanilla) sam2unet_vanilla ;;
+  sam2unet_s3lmup)  sam2unet_s3lmup ;;
   gate)        gate; exit 0 ;;
   all)         s3err ;;
   *)           echo "unknown stage: $STAGE"; exit 1 ;;
