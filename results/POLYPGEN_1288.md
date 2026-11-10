@@ -9,7 +9,7 @@ secondary; its maps are in this repo (commit 76a5357cc). FCT lost on C2 (n.s.). 
 other arms below were scored on PolypGen. They are checkpoints that already existed, so this
 was inference only, done to look for a variant that also wins C2. Those comparisons are
 exploratory and are reported as such. None of them wins C2. S3LMUP's pooled score is the
-image-weighted mean of its 4-decimal centre scores (error < 1e-4).
+mean over its per-image scores (full precision; 4 decimals in the table).
 
 ## meanDic per run
 
@@ -126,16 +126,26 @@ PG-C6        0.8288+-0.0029    0.8400+-0.0075  +0.0111 [ +0.0016, +0.0207]    0.
 pooled       0.8214+-0.0018    0.8295+-0.0019  +0.0081 [ +0.0049, +0.0114]    0.001   0.002        6/6  yes
 ```
 
-## FCT's parts against each other (same statistics, from the scores above)
+## FCT's parts against each other (same statistics)
+
+Computed here, not by seed_summary.py. FCT (S3LMUP) and vanilla use full-precision scores from
+their per-image maps, which are in this repo. S3 and S3LM use the 4-decimal scores above, so
+the last digit of their comparisons can differ by 1 from seed_summary.py's output. The
+official numbers, on the machine with the maps:
+
+```bash
+python seed_summary.py --seeds 1 2 3 4 5 6 --arms S3 S3LM --gt_root <PolypGen root> --sets <C1..C6> --pooled
+python seed_summary.py --seeds 1 2 3 4 5 6 --arms S3LM S3LMUP --gt_root <PolypGen root> --sets <C1..C6> --pooled
+```
 
 ```
 difference = S3LMUP - PVT_VANILLA with the same seed: FCT (a = 2), the arm the PolypGen test was planned for
 set          diff              95% CI p paired  p perm   seeds won
-PG-C1     +0.0113 [ +0.0053,  +0.0174]    0.005   0.006       6/6
-PG-C2     -0.0039 [ -0.0103,  +0.0025]    0.177   0.212       1/6
+PG-C1     +0.0113 [ +0.0052,  +0.0174]    0.005   0.006       6/6
+PG-C2     -0.0039 [ -0.0102,  +0.0025]    0.180   0.212       1/6
 PG-C3     +0.0051 [ +0.0024,  +0.0078]    0.005   0.002       6/6
 PG-C4     +0.0123 [ -0.0154,  +0.0400]    0.306   0.240       4/6
-PG-C5     +0.0243 [ -0.0003,  +0.0488]    0.052   0.043       5/6
+PG-C5     +0.0242 [ -0.0003,  +0.0488]    0.052   0.043       5/6
 PG-C6     +0.0144 [ +0.0042,  +0.0246]    0.015   0.009       6/6
 pooled    +0.0086 [ +0.0037,  +0.0134]    0.006   0.002       6/6
 
@@ -151,24 +161,23 @@ pooled    +0.0049 [ -0.0023,  +0.0121]    0.139   0.048       5/6
 
 difference = S3LMUP - S3LM with the same seed: the upright pull, on top of the flip pulls
 set          diff              95% CI p paired  p perm   seeds won
-PG-C1     -0.0012 [ -0.0063,  +0.0038]    0.555   0.602       2/6
-PG-C2     -0.0013 [ -0.0089,  +0.0063]    0.683   0.686       3/6
-PG-C3     +0.0020 [ +0.0004,  +0.0035]    0.021   0.032       5/6
+PG-C1     -0.0013 [ -0.0063,  +0.0038]    0.552   0.593       2/6
+PG-C2     -0.0013 [ -0.0089,  +0.0064]    0.686   0.686       3/6
+PG-C3     +0.0020 [ +0.0005,  +0.0035]    0.020   0.030       5/6
 PG-C4     -0.0118 [ -0.0485,  +0.0249]    0.447   0.281       3/6
-PG-C5     -0.0027 [ -0.0156,  +0.0102]    0.616   0.706       3/6
-PG-C6     +0.0011 [ -0.0129,  +0.0151]    0.852   0.838       4/6
-pooled    -0.0014 [ -0.0047,  +0.0020]    0.342   0.424       3/6
+PG-C5     -0.0027 [ -0.0156,  +0.0102]    0.613   0.699       3/6
+PG-C6     +0.0011 [ -0.0129,  +0.0151]    0.852   0.835       4/6
+pooled    -0.0014 [ -0.0047,  +0.0020]    0.340   0.418       3/6
 
 difference = S3LMUP - S3 with the same seed: both pulls, on top of the three supervised views
 set          diff              95% CI p paired  p perm   seeds won
-PG-C1     +0.0046 [ -0.0058,  +0.0150]    0.310   0.368       4/6
-PG-C2     +0.0003 [ -0.0080,  +0.0086]    0.933   0.924       4/6
-PG-C3     +0.0020 [ -0.0021,  +0.0062]    0.264   0.236       4/6
+PG-C1     +0.0046 [ -0.0058,  +0.0149]    0.311   0.368       4/6
+PG-C2     +0.0003 [ -0.0080,  +0.0086]    0.930   0.920       4/6
+PG-C3     +0.0020 [ -0.0021,  +0.0062]    0.266   0.227       4/6
 PG-C4     +0.0033 [ -0.0319,  +0.0384]    0.820   0.768       3/6
-PG-C5     +0.0101 [ -0.0139,  +0.0341]    0.328   0.335       3/6
-PG-C6     +0.0037 [ -0.0114,  +0.0188]    0.558   0.470       3/6
-pooled    +0.0036 [ -0.0040,  +0.0112]    0.281   0.232       3/6
-
+PG-C5     +0.0101 [ -0.0139,  +0.0340]    0.329   0.335       3/6
+PG-C6     +0.0037 [ -0.0114,  +0.0188]    0.558   0.463       3/6
+pooled    +0.0036 [ -0.0040,  +0.0112]    0.282   0.234       3/6
 ```
 
 ## Reading
@@ -176,7 +185,7 @@ pooled    +0.0036 [ -0.0040,  +0.0112]    0.281   0.232       3/6
 - Every arm with a consistency term improves pooled PolypGen on all six seeds, from +0.0081 to
   +0.0100, every 95% interval above 0. The three supervised views alone (S3) give +0.0050, with
   an interval that includes 0.
-- The flip pulls on top of the views (S3LM - S3): +0.0049 pooled, positive on all six centres
+- The flip pulls on top of the views (S3LM - S3): +0.0049 pooled, up on five centres (C3 +0.0000)
   and on 5/6 seeds. Not significant: paired p 0.139, permutation p 0.048.
 - The upright pull adds nothing here (S3LMUP - S3LM: pooled -0.0014, n.s.). The margin factor
   a does not matter either: pooled +0.0087 / +0.0100 / +0.0081 / +0.0086 for a = 0.5 / 1 / 1.5 / 2.
