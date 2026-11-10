@@ -9,6 +9,12 @@
 #  vanilla       stock Polyp-PVT loss, no FCT, orientation aug off (the stock
 #                default), multi-scale on, same AMP/drop-path as the FCT arms
 #  vanilla_aug   the same with Polyp-PVT's flip/rotation augmentation on
+#  vanilla_3x    vanilla trained three times as long: 297 epochs (--epoch 298) against 99, the
+#                supervised passes of FCT's three views. The compute control for FCT. Constant
+#                learning rate, as every 99-epoch run had (--lr_decay_epoch 0: the stock decay
+#                at epoch 200 compounds every epoch and would stop training there). The five
+#                sets are scored every 3rd epoch (--eval_every 3), so the best epoch is picked
+#                from 99 evaluations, as for every other arm, and epoch 297 is scored.
 #  s3            the three views supervised, no pull at all (--fct_weight 0): deterministic
 #                flip augmentation, the first step of the component dissection
 #  s3f           FCT v2 with a constant weight (w = 1), the S3F recipe
@@ -74,7 +80,7 @@
 #  pipefail: a training run that crashes or is killed returns non-zero, so its
 #  (partial or stale) checkpoint is not scored.
 #
-#  Usage: bash run_1288.sh vanilla | vanilla_aug | s3 | s3f | s3fup | s3relup | s3up | s3err | s3gate | s3bgate | s3rel | s3sig
+#  Usage: bash run_1288.sh vanilla | vanilla_aug | vanilla_3x | s3 | s3f | s3fup | s3relup | s3up | s3err | s3gate | s3bgate | s3rel | s3sig
 #                          | s3sigy | s3lm | s3lmup | s3lmup_a05 | s3lmup_a10 | s3lmup_a15
 #                          | s3lmup_a30 | pranetv2_vanilla | pranetv2_s3lmup | asgnet_vanilla
 #                          | asgnet_s3lmup | sam2unet_vanilla | sam2unet_s3lmup | gate
@@ -121,6 +127,8 @@ FCT="--orientation_aug 0 --fct 1 --fct_sup 1 --fct_all_scales 1 --fct_loss bce -
      --fct_sync_rng 1 --grad_diag 50"
 vanilla()     { train_arm PVT_VANILLA$SFX --orientation_aug 0 && infer_arm PVT_VANILLA$SFX PolypPVT; }
 vanilla_aug() { train_arm PVT_VANILLA_AUG$SFX --orientation_aug 1 && infer_arm PVT_VANILLA_AUG$SFX PolypPVT; }
+vanilla_3x()  { train_arm PVT_VANILLA_3X$SFX --orientation_aug 0 --epoch 298 --eval_every 3 --lr_decay_epoch 0 \
+                  && infer_arm PVT_VANILLA_3X$SFX PolypPVT; }
 s3()          { train_arm S3$SFX $FCT --fct_weight 0 && infer_arm S3$SFX PolypPVT; }
 s3f()         { train_arm S3F$SFX $FCT --fct_weit 0 && infer_arm S3F$SFX PolypPVT; }
 s3fup()       { train_arm S3FUP$SFX $FCT --fct_weit 0 --fct_up 1 && infer_arm S3FUP$SFX PolypPVT; }
@@ -163,6 +171,7 @@ gate()        { local ck=""; for a in S3F S3F_EMA S3W05 S3ERR; do [ -d "./model_
 case "$STAGE" in
   vanilla)     vanilla ;;
   vanilla_aug) vanilla_aug ;;
+  vanilla_3x)  vanilla_3x ;;
   s3)          s3 ;;
   s3f)         s3f ;;
   s3fup)       s3fup ;;

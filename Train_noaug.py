@@ -865,6 +865,13 @@ if __name__ == '__main__':
     parser.add_argument('--save_every_epoch', type=int, default=0,
                         help='1 = keep a checkpoint per epoch (~100MB x epochs). '
                              'Default keeps only best + last')
+    parser.add_argument('--lr_decay_epoch', type=int, default=None,
+                        help='the stock loop calls adjust_lr(..., 0.1, 200), which from epoch 200 on '
+                             'multiplies the rate by 0.1 EVERY epoch (it compounds), so the rate '
+                             'is ~0 a few epochs later. Harmless for the 99-epoch runs, which never '
+                             'get there; a longer run must choose: 0 = constant rate, as every '
+                             '99-epoch run had; N = the stock call with N in place of 200. '
+                             'Default: the stock 200, refused for runs that reach it')
     parser.add_argument('--eval_every', type=int, default=1,
                         help='evaluate the 5 test sets every N epochs')
     parser.add_argument('--accum', type=int, default=1,
@@ -988,15 +995,26 @@ if __name__ == '__main__':
     print('  batchsize {}{}  trainsize {}  amp {}  epochs {} (loop runs 1..{})'.format(
         opt.batchsize, ' as {} parts (--accum)'.format(opt.accum) if opt.accum > 1 else '',
         opt.trainsize, bool(opt.amp), opt.epoch, opt.epoch - 1))
-    # adjust_lr is called with a hardcoded decay_epoch of 200, so for any run
+    # adjust_lr is called with decay_epoch 200 (--lr_decay_epoch), so for any run
     # shorter than that decay = 0.1**0 = 1 and the multiply is a no-op: the
-    # learning rate never changes. --decay_rate and --decay_epoch are parsed
+    # learning rate never changes. Past it the multiply compounds every epoch. --decay_rate and --decay_epoch are parsed
     # but never read. Both are stock behaviour, left alone so the recipe stays
     # faithful to the released one, but stated here so nobody assumes a
     # schedule that is not running. A host can bring its paper's schedule instead.
     lr_schedule = HOST.lr_schedule(optimizer, opt)
-    print('  lr {} {}'.format(opt.lr, HOST.lr_note if lr_schedule else
-                              'CONSTANT (no decay; --decay_rate/--decay_epoch are inert)'))
+    lr_decay_epoch = 200 if opt.lr_decay_epoch is None else opt.lr_decay_epoch
+    if lr_schedule is None and opt.lr_decay_epoch is None and opt.epoch - 1 >= lr_decay_epoch:
+        raise SystemExit('--epoch {} runs past epoch 200, where the stock adjust_lr starts multiplying '
+                         'the rate by 0.1 every epoch: training would stop there. Pass --lr_decay_epoch 0 '
+                         'for a constant rate (as every 99-epoch run had), or --lr_decay_epoch N to keep '
+                         'the stock call from epoch N.'.format(opt.epoch))
+    if lr_schedule is not None:
+        print('  lr {} {}'.format(opt.lr, HOST.lr_note))
+    elif lr_decay_epoch > 0 and opt.epoch - 1 >= lr_decay_epoch:
+        print('  lr {} constant to epoch {}, then x0.1 every epoch (stock adjust_lr, --lr_decay_epoch {})'.format(
+            opt.lr, lr_decay_epoch - 1, lr_decay_epoch))
+    else:
+        print('  lr {} CONSTANT (no decay; --decay_rate/--decay_epoch are inert)'.format(opt.lr))
     if opt.clip <= 0:
         print('  gradient clipping: off (--clip {:g})'.format(opt.clip))
     if opt.fct and _fct_v2(opt):
@@ -1034,10 +1052,10 @@ if __name__ == '__main__':
         for _p in state['ema'].parameters():
             _p.requires_grad_(False)
     for epoch in range(1, opt.epoch):
-        if lr_schedule is None:
-            adjust_lr(optimizer, opt.lr, epoch, 0.1, 200)
-        else:
+        if lr_schedule is not None:
             lr_schedule(epoch)
+        elif lr_decay_epoch > 0:
+            adjust_lr(optimizer, opt.lr, epoch, 0.1, lr_decay_epoch)
         train(train_loader, model, optimizer, epoch, opt, state)
     # run_seeds.sh looks for this line to tell a finished run from an interrupted one.
     print('=== training finished: {} epochs, best five-set mean {:.4f}'.format(

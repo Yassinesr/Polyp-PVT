@@ -43,6 +43,12 @@
 #      CUDA_VISIBLE_DEVICES=0 ARMS="asgnet_vanilla asgnet_s3lmup" bash run_seeds.sh 1 2 3 2>&1 | tee seeds_asgnet_a.out
 #      CUDA_VISIBLE_DEVICES=1 ARMS="asgnet_vanilla asgnet_s3lmup" bash run_seeds.sh 4 5 6 2>&1 | tee seeds_asgnet_b.out
 #      python seed_summary.py --seeds 1 2 3 4 5 6 --arms ASGNET_VANILLA ASGNET_S3LMUP
+#  The compute control: vanilla trained three times as long (about 6.5 h a run), then FCT
+#  against it and it against vanilla:
+#      CUDA_VISIBLE_DEVICES=0 ARMS="vanilla_3x" bash run_seeds.sh 1 2 3 2>&1 | tee seeds_3x_a.out
+#      CUDA_VISIBLE_DEVICES=1 ARMS="vanilla_3x" bash run_seeds.sh 4 5 6 2>&1 | tee seeds_3x_b.out
+#      python seed_summary.py --seeds 1 2 3 4 5 6 --arms PVT_VANILLA_3X S3LMUP
+#      python seed_summary.py --seeds 1 2 3 4 5 6 --arms PVT_VANILLA PVT_VANILLA_3X
 #  and SAM2-UNet the same way:
 #      CUDA_VISIBLE_DEVICES=0 ARMS="sam2unet_vanilla sam2unet_s3lmup" bash run_seeds.sh 1 2 3 2>&1 | tee seeds_sam2unet_a.out
 #      CUDA_VISIBLE_DEVICES=1 ARMS="sam2unet_vanilla sam2unet_s3lmup" bash run_seeds.sh 4 5 6 2>&1 | tee seeds_sam2unet_b.out
@@ -57,6 +63,7 @@ run_name() {   # run_1288.sh stage -> run name without the seed suffix
   case "$1" in
     vanilla)     echo PVT_VANILLA ;;
     vanilla_aug) echo PVT_VANILLA_AUG ;;
+    vanilla_3x)  echo PVT_VANILLA_3X ;;
     *)           echo "${1^^}" ;;
   esac
 }
