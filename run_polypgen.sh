@@ -52,7 +52,7 @@ for seed in $SEEDS; do
       continue
     fi
     echo "=== $(date '+%F %T')  $run on PolypGen"
-    python Test_tta.py --views 1 --pth_path "./model_pth/$run/PolypPVT.pth" --data_root "$ROOT" \
+    python Test_maps.py --pth_path "./model_pth/$run/PolypPVT.pth" --data_root "$ROOT" \
         --sets $SETS --save_root "./result_map/$run" || echo "!! $run failed"
   done
 done

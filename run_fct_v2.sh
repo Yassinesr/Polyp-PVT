@@ -9,7 +9,7 @@
 #                     S3      supervised flips only (lambda 0)      <- control
 #                     S3W05   + soft-BCE consistency, lambda 0.5, boundary-weighted
 #                     S3W2    + soft-BCE consistency, lambda 2,   boundary-weighted
-#  Stage 3  infer   plain inference (--views 1) + flip_gap for each new arm.
+#  Stage 3  infer   plain inference + flip_gap for each new arm.
 #  Stage 4  s3f L   S3F: best lambda L from S3W05/S3W2, consistency NOT weighted,
 #                   i.e. the ablation of the boundary weight. Trains + infers.
 #
@@ -51,7 +51,7 @@ train_arm() {   # name, extra flags...
 infer_arm() {
   local arm="$1"
   echo "=== infer $arm"
-  python Test_tta.py --pth_path "./model_pth/$arm" --views 1 --save_root "./result_map/$arm"
+  python Test_maps.py --pth_path "./model_pth/$arm" --save_root "./result_map/$arm"
   python flip_gap.py --pth_path "./model_pth/$arm" --out "$GAP_TSV"
 }
 

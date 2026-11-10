@@ -112,7 +112,7 @@ infer_arm() {   # name, checkpoint files...
     [ -f "./model_pth/$arm/$ck.pth" ] || continue
     local tag="$arm"
     echo "=== infer $arm/$ck -> result_map/$tag"
-    python Test_tta.py --pth_path "./model_pth/$arm/$ck.pth" --views 1 --save_root "./result_map/$tag" $HOSTARGS
+    python Test_maps.py --pth_path "./model_pth/$arm/$ck.pth" --save_root "./result_map/$tag" $HOSTARGS
     python flip_gap.py --pth_path "./model_pth/$arm/$ck.pth" --out flip_gap.tsv $HOSTARGS
   done
 }

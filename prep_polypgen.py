@@ -9,7 +9,7 @@ image and mask folders of each centre by name, pairs every image with its mask, 
     <dst>/PolypGen_C1/masks/<name>.png      the mask, binarised at > 128 and saved losslessly
     ...                                     one folder per centre, C1 to C6
 
-which is what Test_tta.py, eval_dice.py and seed_summary.py read. Sequence frames, negative
+which is what Test_maps.py, eval_dice.py and seed_summary.py read. Sequence frames, negative
 (polyp-free) frames, boxes and overlays are left out. A frame whose mask is empty is skipped too:
 Dice is undefined without a polyp, and the MATLAB scorer would count it as 0.
 

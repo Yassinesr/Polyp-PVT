@@ -1,7 +1,7 @@
 """The models FCT can train (--host): Polyp-PVT and hosts from other papers.
 
 A host says how to build its model, which of its outputs make the prediction, and the
-paper's own supervised loss for one view. Train_noaug.py, Test_tta.py and flip_gap.py go
+paper's own supervised loss for one view. Train_noaug.py, Test_maps.py and flip_gap.py go
 through it instead of assuming Polyp-PVT's two heads, so FCT is the same code on every
 host and the vanilla arm keeps each paper's loss.
 

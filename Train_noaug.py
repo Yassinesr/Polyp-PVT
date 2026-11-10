@@ -1,6 +1,6 @@
 """Polyp-PVT trained on WHOLE IMAGES with the orientation-symmetry augmentation
-removed, so that flip-consistency training (FCT) and flip TTA can be measured
-against a baseline that does not already contain the symmetry they exploit.
+removed, so that flip-consistency training (FCT) can be measured against a
+baseline that does not already contain the symmetry it exploits.
 
 WHY THIS FILE EXISTS
 --------------------
@@ -8,21 +8,20 @@ On the patch-refinement side of this project the ladder was:
 
     A  orientation aug OFF, no FCT
     B  orientation aug OFF, FCT consistency-only
-    C  = B scored with 4-view flip TTA
 
 This script is the whole-image analogue, so the two settings can be compared
 directly and the question "are patches or full images more suitable for
-FCT+TTA?" can be answered with the same ladder on both sides.
+FCT?" can be answered with the same ladder on both sides.
 
 WHAT WAS REMOVED, AND WHY
 -------------------------
 The stock repo has TWO independent sources of augmentation. Only one of them
-clashes with FCT+TTA.
+clashes with FCT.
 
 1. ORIENTATION (utils/dataloader.py, gated on `augmentations == 'True'`):
       RandomRotation(90), RandomVerticalFlip(0.5), RandomHorizontalFlip(0.5)
-   This is exactly the symmetry group FCT constrains and flip-TTA averages
-   over. It CLASHES and is removed here: this script hard-wires the loader to
+   This is exactly the symmetry group FCT constrains. It CLASHES and is
+   removed here: this script hard-wires the loader to
    the no-augmentation branch and does not expose a flag to re-enable it.
 
    Worth knowing: in the stock Train.py this augmentation is ALREADY OFF by
@@ -37,13 +36,13 @@ clashes with FCT+TTA.
    Also note the stock transform is RandomRotation(90), which in torchvision
    means a uniform random angle in [-90, +90] degrees -- not a 90-degree step.
    That trains continuous rotation invariance, a strictly larger group than
-   the D4 group flip-TTA averages over.
+   the flips FCT works with.
 
 2. MULTI-SCALE (Train.py, `size_rates = [0.75, 1, 1.25]`):
    Each batch is run at three scales with a backward pass each. This is NOT
    gated by --augmentation and is always on in the stock recipe. It acts on
    the SCALE axis, which is orthogonal to the flip/rotation symmetry that
-   FCT+TTA target, so it does NOT clash and is KEPT ON by default. It is
+   FCT targets, so it does NOT clash and is KEPT ON by default. It is
    exposed as `--multiscale 0|1` so it can be ablated separately -- turning it
    off changes the recipe substantially and will lower the baseline, so keep
    it on unless scale is the thing being studied.
@@ -106,7 +105,7 @@ USAGE
   arm B/C (no-aug + FCT, consistency-only):
     python Train_noaug.py --fct 1 --fct_weight 0.5 --train_save ./model_pth/PolypPVT_noaug_fct/
 
-Then score with Test.py (no TTA) and Test_tta.py (4-view flip TTA).
+Then save the maps with Test_maps.py and score them with eval_dice.py.
 
 FCT v2 (seq mode only; every default keeps the v1 behaviour above)
 -----------------------------------------------------------------
@@ -121,9 +120,9 @@ See run_fct_v2.sh for the arms, and flip_gap.py for the equivariance check.
 
 OTHER MODELS (--host)
 ---------------------
-  --host pranetv2|asgnet --host_root <clone> trains PraNet-V2 or ASGNet in place of
-  Polyp-PVT, with that paper's own loss; everything FCT does is unchanged.
-  See hosts.py, setup_hosts.sh and the pranetv2_* / asgnet_* stages of run_1288.sh.
+  --host pranetv2|asgnet|sam2unet --host_root <clone> trains PraNet-V2, ASGNet or
+  SAM2-UNet in place of Polyp-PVT, with that paper's own loss; everything FCT does is
+  unchanged. See hosts.py, setup_hosts.sh and the host stages of run_1288.sh.
 """
 import os
 import copy
@@ -171,7 +170,7 @@ def _prob(model, x):
     """Inference-equivalent probability map: sigmoid of the host's prediction, P1 + P2.
 
     Test.py predicts with `P1 + P2`, so the consistency term is applied to the
-    same quantity TTA will later average. Constraining anything else would be
+    quantity the model is scored on. Constraining anything else would be
     constraining a signal that never reaches the output.
     """
     return torch.sigmoid(HOST.logit(HOST.heads(model(x))))
@@ -739,7 +738,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_save', type=str, default='./model_pth/PolypPVT_noaug/')
 
     # Scale augmentation: orthogonal to the flip group, so it does not clash
-    # with FCT+TTA. On by default because it is part of the stock recipe.
+    # with FCT. On by default because it is part of the stock recipe.
     parser.add_argument('--multiscale', type=int, default=1,
                         help='1 = stock [0.75,1,1.25] multi-scale, 0 = single scale')
     parser.add_argument('--size_rates', type=float, nargs='+', default=None,
@@ -755,8 +754,8 @@ if __name__ == '__main__':
     # command line even though its default silently does not.
     #
     # Turning this ON re-enables RandomRotation(90) + V/H flips, which is
-    # exactly the symmetry group FCT constrains and TTA averages over. Do not
-    # combine it with --fct and then report the result as an FCT measurement.
+    # exactly the symmetry group FCT constrains. Do not combine it with --fct
+    # and then report the result as an FCT measurement.
     parser.add_argument('--orientation_aug', type=int, default=0,
                         help='1 = re-enable RandomRotation + V/H flips (diagnostic only)')
 
