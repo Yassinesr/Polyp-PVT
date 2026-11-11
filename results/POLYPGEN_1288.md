@@ -192,3 +192,49 @@ pooled    +0.0036 [ -0.0040,  +0.0112]    0.282   0.234       3/6
 - C2 is below vanilla for every arm: -0.0042 with the views alone, -0.0026 with the pull to the upright view,
   -0.0008 to -0.0039 across a. No interval excludes 0. With six seeds, C2's 95% interval is
   about +-0.006 wide, so differences of this size cannot be told from noise.
+
+## PraNet-V2: FCT against its vanilla (seeds 1-6)
+
+Maps in result_map/PRANETV2_*_s*/PolypGen_C* (commit bb9ad7b8c), scored with run_polypgen.sh;
+summary as pushed in polypgen_pranetv2_summary.txt. Re-scored from the maps with seed_summary.py
+on 2026-11-11: every line identical.
+
+```
+
+meanDic per run              PG-C1    PG-C2    PG-C3    PG-C4    PG-C5    PG-C6   pooled
+PRANETV2_VANILLA_s1         0.7777   0.7850   0.8672   0.5539   0.5905   0.7727   0.7572
+PRANETV2_VANILLA_s2         0.8090   0.8128   0.8786   0.6302   0.6199   0.8041   0.7858
+PRANETV2_VANILLA_s3         0.7820   0.7445   0.8551   0.5197   0.5980   0.7622   0.7432
+PRANETV2_VANILLA_s4         0.7864   0.7967   0.8716   0.5673   0.5739   0.7830   0.7620
+PRANETV2_VANILLA_s5         0.7966   0.7680   0.8616   0.6063   0.5896   0.7775   0.7610
+PRANETV2_VANILLA_s6         0.7892   0.7770   0.8723   0.5879   0.5657   0.7891   0.7602
+PRANETV2_S3LMUP_s1          0.8153   0.8165   0.8875   0.6073   0.6219   0.8298   0.7899
+PRANETV2_S3LMUP_s2          0.8291   0.7953   0.8737   0.6172   0.6379   0.8183   0.7865
+PRANETV2_S3LMUP_s3          0.8122   0.8098   0.8784   0.5806   0.6131   0.8195   0.7805
+PRANETV2_S3LMUP_s4          0.8409   0.7918   0.8818   0.5841   0.6318   0.8221   0.7865
+PRANETV2_S3LMUP_s5          0.8350   0.8120   0.8810   0.6141   0.6056   0.8240   0.7885
+PRANETV2_S3LMUP_s6          0.8114   0.7932   0.8661   0.6215   0.6313   0.8008   0.7790
+
+seeds [1, 2, 3, 4, 5, 6] (n = 6); difference = PRANETV2_S3LMUP - PRANETV2_VANILLA with the same seed
+set       PRANETV2_VANILLA mean+-SD PRANETV2_S3LMUP mean+-SD     diff              95% CI p paired  p perm   seeds won  improved?
+PG-C1        0.7902+-0.0112    0.8240+-0.0127  +0.0339 [ +0.0206, +0.0471]    0.001   0.002        6/6  yes
+PG-C2        0.7807+-0.0236    0.8031+-0.0109  +0.0224 [ -0.0100, +0.0548]    0.135   0.058        4/6  no
+PG-C3        0.8678+-0.0084    0.8781+-0.0074  +0.0103 [ -0.0034, +0.0241]    0.112   0.050        4/6  no
+PG-C4        0.5775+-0.0393    0.6041+-0.0175  +0.0266 [ -0.0030, +0.0561]    0.069   0.158        5/6  no
+PG-C5        0.5896+-0.0190    0.6236+-0.0124  +0.0340 [ +0.0105, +0.0575]    0.014   0.006        6/6  yes
+PG-C6        0.7814+-0.0144    0.8191+-0.0098  +0.0377 [ +0.0164, +0.0590]    0.006   0.004        6/6  yes
+pooled       0.7616+-0.0137    0.7851+-0.0044  +0.0236 [ +0.0100, +0.0371]    0.007   0.006        6/6  yes
+
+your goal (all 6 sets won, one by >= 0.001):
+  seed 1: won 6/6   GOAL MET
+  seed 2: won 3/6
+  seed 3: won 6/6   GOAL MET
+  seed 4: won 5/6
+  seed 5: won 6/6   GOAL MET
+  seed 6: won 5/6
+  seed means: won 6/6   GOAL MET
+```
+
+Reading. FCT improves pooled PolypGen on PraNet-V2 by +0.0236 [+0.0100, +0.0371], on all six seeds,
+and the mean over seeds is above vanilla on all six centres, C2 included (+0.0224, interval
+[-0.0100, +0.0548]). The interval lies above 0 on C1, C5 and C6.
