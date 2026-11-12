@@ -661,7 +661,7 @@ def train(train_loader, model, optimizer, epoch, opt, state):
                    .format(datetime.now(), epoch, opt.epoch, i, state['total_step'],
                            loss_record.show()))
             if opt.fct:
-                if opt.fct_weight > 0:
+                if opt.fct_weight > 0 and cons_record.losses:  # empty when no pull is recorded (s3up: --fct_flip_pull 0)
                     lbl = 'cons_kl' if (v2 and opt.fct_loss == 'bce') else 'cons'
                     msg += ', {}: {:0.5f}'.format(lbl, cons_record.show())
                 if state.get('diag') is not None:
