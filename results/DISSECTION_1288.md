@@ -2,7 +2,7 @@
 
 Trained on the re-annotated TrainDataset (1288); best epoch selected on the five-set test mean (PolypPVT.pth), as Train_noaug.py does. meanDic from eval_dice.py. Published rows are not comparable.
 
-- s3: seeds 1-6 done. s3up: seeds 1-6 done (re-run after the fix to the crash below). s3fup: seeds 1-5 done, seed 6 not finished yet. s3relup: seeds 1-3.
+- s3: seeds 1-6 done. s3up: seeds 1-6 done (re-run after the fix to the crash below). s3fup, s3relup: seeds 1-6 done.
 - s3up's first attempt crashed on all six seeds at the first log line (Train_noaug.py:665, `cons_record.show()` on an empty meter: with --fct_flip_pull 0 no flip-pull loss is recorded); fixed and re-run.
 
 ## PVT_VANILLA -> S3, seeds 1 2 3 4 5 6
@@ -320,12 +320,23 @@ Reading. The pull to the best flipped view alone adds nothing to the three views
 n.s.). Neither pull on its own separates from the views (pull to the upright view +0.0010, n.s.), nor
 does either one on top of the other (pull to the upright view +0.0024, pull to the best flipped view
 +0.0005, both n.s.). FCT, with both, has the highest
-five-set mean of the ladder. It is also the only arm of the ladder whose five-set gain over vanilla
-has a 95% interval above 0: +0.0052, p 0.016, 6/6 seeds (section PVT_VANILLA -> S3LMUP above).
-S3LM comes closest: +0.0047, interval [-0.0002, +0.0096], p 0.058 (seeds_s3lm.out).
+five-set mean of the ladder.
 
-## PVT_VANILLA -> S3FUP, seeds 1 2 3 4 5 (seed 6 not finished)
+Across all the arms, six seeds each: every arm with both pulls beats vanilla on the five-set mean with a
+95% interval above 0. That covers FCT (+0.0052, p 0.016), FCT without the weights (S3FUP +0.0033,
+p 0.034), FCT with the lag-only gate (S3RELUP +0.0034, p 0.015), and the a = 0.5 and a = 1.5 variants
+(+0.0051, +0.0036). a = 1 just misses (+0.0033, p 0.059). No arm with one pull or none does: S3
++0.0037 (p 0.052), S3UP +0.0028 (p 0.074), S3LM +0.0047 (p 0.058). The direct comparisons between
+these arms are all within noise, so this is a pattern across arms, not a measured difference between
+any two of them. The weights add +0.0019 to FCT over S3FUP (n.s., p 0.32).
+
+## PVT_VANILLA -> S3FUP and S3RELUP, seeds 1-6
+
+As pushed in s3fup_s3relup_summary.txt (commit d6a8000af).
+
 ```
+##### PVT_VANILLA vs S3FUP, seeds 1-6
+
 meanDic per run             Kvasir ClinicDB  ColonDB  CVC-300     ETIS     mean
 PVT_VANILLA_s1              0.9204   0.9327   0.7941   0.8847   0.7860   0.8636
 PVT_VANILLA_s2              0.9100   0.9397   0.8078   0.8900   0.7831   0.8661
@@ -338,18 +349,16 @@ S3FUP_s2                    0.9213   0.9182   0.8064   0.8885   0.7936   0.8656
 S3FUP_s3                    0.9238   0.9175   0.7921   0.8967   0.8149   0.8690
 S3FUP_s4                    0.9270   0.9344   0.8143   0.8820   0.8096   0.8735
 S3FUP_s5                    0.9245   0.9207   0.8032   0.8912   0.7952   0.8670
-S3FUP_s6                    missing or incomplete
+S3FUP_s6                    0.9186   0.9322   0.8137   0.8849   0.8016   0.8702
 
-!! seeds without both runs (left out): [6]
-
-seeds [1, 2, 3, 4, 5] (n = 5); difference = S3FUP - PVT_VANILLA with the same seed
+seeds [1, 2, 3, 4, 5, 6] (n = 6); difference = S3FUP - PVT_VANILLA with the same seed
 set       PVT_VANILLA mean+-SD    S3FUP mean+-SD     diff              95% CI p paired  p perm   seeds won  improved?
-Kvasir       0.9199+-0.0064    0.9245+-0.0022  +0.0046 [ -0.0013, +0.0104]    0.097   0.151        3/5  no
-ClinicDB     0.9326+-0.0068    0.9243+-0.0077  -0.0083 [ -0.0195, +0.0029]    0.109   0.071        0/5  no
-ColonDB      0.8017+-0.0070    0.8054+-0.0085  +0.0036 [ -0.0141, +0.0214]    0.599   0.468        3/5  no
-CVC-300      0.8871+-0.0094    0.8876+-0.0069  +0.0005 [ -0.0157, +0.0167]    0.937   0.944        1/5  no
-ETIS         0.7852+-0.0021    0.8010+-0.0105  +0.0158 [ +0.0046, +0.0271]    0.018   0.008        5/5  yes
-mean         0.8653+-0.0018    0.8686+-0.0030  +0.0032 [ -0.0006, +0.0071]    0.079   0.071        4/5  no
+Kvasir       0.9194+-0.0059    0.9235+-0.0031  +0.0042 [ -0.0004, +0.0087]    0.065   0.154        4/6  no
+ClinicDB     0.9317+-0.0064    0.9256+-0.0076  -0.0061 [ -0.0163, +0.0042]    0.188   0.165        1/6  no
+ColonDB      0.8028+-0.0068    0.8068+-0.0083  +0.0040 [ -0.0094, +0.0174]    0.479   0.379        4/6  no
+CVC-300      0.8879+-0.0086    0.8872+-0.0063  -0.0007 [ -0.0133, +0.0119]    0.895   0.881        1/6  no
+ETIS         0.7861+-0.0029    0.8011+-0.0094  +0.0150 [ +0.0062, +0.0238]    0.007   0.002        6/6  yes
+mean         0.8656+-0.0017    0.8688+-0.0028  +0.0033 [ +0.0004, +0.0062]    0.034   0.032        5/6  yes
 
 your goal (all 5 sets won, one by >= 0.001):
   seed 1: won 3/5
@@ -357,5 +366,40 @@ your goal (all 5 sets won, one by >= 0.001):
   seed 3: won 2/5
   seed 4: won 2/5
   seed 5: won 3/5
+  seed 6: won 4/5
+  seed means: won 3/5
+
+##### PVT_VANILLA vs S3RELUP, seeds 1-6
+
+meanDic per run             Kvasir ClinicDB  ColonDB  CVC-300     ETIS     mean
+PVT_VANILLA_s1              0.9204   0.9327   0.7941   0.8847   0.7860   0.8636
+PVT_VANILLA_s2              0.9100   0.9397   0.8078   0.8900   0.7831   0.8661
+PVT_VANILLA_s3              0.9238   0.9215   0.8103   0.8733   0.7871   0.8632
+PVT_VANILLA_s4              0.9270   0.9347   0.7990   0.8886   0.7869   0.8672
+PVT_VANILLA_s5              0.9185   0.9345   0.7974   0.8991   0.7829   0.8665
+PVT_VANILLA_s6              0.9164   0.9271   0.8079   0.8915   0.7908   0.8667
+S3RELUP_s1                  0.9212   0.9401   0.8052   0.8886   0.7966   0.8703
+S3RELUP_s2                  0.9146   0.9293   0.8039   0.8952   0.7958   0.8678
+S3RELUP_s3                  0.9211   0.9114   0.8158   0.8815   0.7920   0.8644
+S3RELUP_s4                  0.9238   0.9404   0.7941   0.8913   0.8035   0.8706
+S3RELUP_s5                  0.9155   0.9287   0.7963   0.8946   0.8067   0.8684
+S3RELUP_s6                  0.9267   0.9278   0.8153   0.8848   0.8060   0.8721
+
+seeds [1, 2, 3, 4, 5, 6] (n = 6); difference = S3RELUP - PVT_VANILLA with the same seed
+set       PVT_VANILLA mean+-SD  S3RELUP mean+-SD     diff              95% CI p paired  p perm   seeds won  improved?
+Kvasir       0.9194+-0.0059    0.9205+-0.0047  +0.0011 [ -0.0045, +0.0068]    0.627   0.732        3/6  no
+ClinicDB     0.9317+-0.0064    0.9296+-0.0106  -0.0021 [ -0.0103, +0.0061]    0.536   0.723        3/6  no
+ColonDB      0.8028+-0.0068    0.8051+-0.0092  +0.0024 [ -0.0045, +0.0093]    0.418   0.608        3/6  no
+CVC-300      0.8879+-0.0086    0.8893+-0.0054  +0.0015 [ -0.0046, +0.0076]    0.562   0.738        4/6  no
+ETIS         0.7861+-0.0029    0.8001+-0.0061  +0.0140 [ +0.0073, +0.0206]    0.003   0.002        6/6  yes
+mean         0.8656+-0.0017    0.8689+-0.0027  +0.0034 [ +0.0010, +0.0057]    0.015   0.035        6/6  yes
+
+your goal (all 5 sets won, one by >= 0.001):
+  seed 1: won 5/5   GOAL MET
+  seed 2: won 3/5
+  seed 3: won 3/5
+  seed 4: won 3/5
+  seed 5: won 1/5
+  seed 6: won 4/5
   seed means: won 4/5
 ```
