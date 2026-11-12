@@ -325,10 +325,12 @@ five-set mean of the ladder.
 Across all the arms, six seeds each: every arm with both pulls beats vanilla on the five-set mean with a
 95% interval above 0. That covers FCT (+0.0052, p 0.016), FCT without the weights (S3FUP +0.0033,
 p 0.034), FCT with the lag-only gate (S3RELUP +0.0034, p 0.015), and the a = 0.5 and a = 1.5 variants
-(+0.0051, +0.0036). a = 1 just misses (+0.0033, p 0.059). No arm with one pull or none does: S3
-+0.0037 (p 0.052), S3UP +0.0028 (p 0.074), S3LM +0.0047 (p 0.058). The direct comparisons between
-these arms are all within noise, so this is a pattern across arms, not a measured difference between
-any two of them. The weights add +0.0019 to FCT over S3FUP (n.s., p 0.32).
+(+0.0051, +0.0036). a = 1 just misses (+0.0033, p 0.059). Of the arms with one pull or none, S3
+(+0.0037, p 0.052), S3UP (+0.0028, p 0.074) and S3LM (+0.0047, p 0.058) do not, but S3SIG does: the pull
+to the upright view alone, with the confidence-graded weight, +0.0040 [+0.0013, +0.0068], p 0.013, 6/6
+seeds (seeds_hosts.out), and still +0.0032 [+0.0008, +0.0056], p 0.020, on the five seeds it was not
+chosen on (seeds.out). So "both pulls are needed" does not hold. The direct comparisons between all
+these arms are within noise. The weights add +0.0019 to FCT over S3FUP (n.s., p 0.32).
 
 ## PVT_VANILLA -> S3FUP and S3RELUP, seeds 1-6
 
