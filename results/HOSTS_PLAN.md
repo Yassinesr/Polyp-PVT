@@ -1,5 +1,13 @@
 # New host for the main body: plan, fixed before any run (2026-11-10)
 
+**Update, 2026-11-13.** The SAM2-UNet runs (six seeds, both arms) were discarded, and HGM (Hybrid Graph
+Mamba, MICCAI 2025) takes its place as the third host, to test FCT on a Mamba-based network. The rest of
+this file is the plan as written on 2026-11-10 and is kept as the record. Its note on HGM still applies:
+the released code loads no ImageNet weights into the backbone and by default starts training from the
+authors' finished model (`--pre_parameter ./best_parameter_HGM.pth`). The HGM runs therefore need to
+state which weights they start from; both arms should start from the ImageNet PVTv2-b2 weights. HGM's
+own loader applies no flips.
+
 ASGNet leaves the main body. In its place: a 2025/2026 polyp segmentation network, chosen
 below by criteria fixed before any of its runs. This file records the choice, the recipe and
 the analysis, so the result is read the same way whatever it is.
