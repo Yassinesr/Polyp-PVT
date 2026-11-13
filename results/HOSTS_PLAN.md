@@ -1,7 +1,10 @@
 # New host for the main body: plan, fixed before any run (2026-11-10)
 
 **Update, 2026-11-13.** The SAM2-UNet runs (six seeds, both arms) were discarded, and HGM (Hybrid Graph
-Mamba, MICCAI 2025) takes its place as the third host, to test FCT on a Mamba-based network. The rest of
+Mamba, MICCAI 2025) takes its place as the third host, to test FCT on a Mamba-based network. Reason
+given for discarding them: the runs crashed, and the model was judged not suited to FCT. (flip_gap.tsv
+holds rows for all 12 of those runs.) PolypGen is closed as of the same day: no further PolypGen runs,
+so HGM is reported on the five test sets. The rest of
 this file is the plan as written on 2026-11-10 and is kept as the record. Its note on HGM still applies:
 the released code loads no ImageNet weights into the backbone and by default starts training from the
 authors' finished model (`--pre_parameter ./best_parameter_HGM.pth`). The HGM runs therefore need to

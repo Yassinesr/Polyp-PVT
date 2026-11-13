@@ -5,6 +5,9 @@ that is now built in: the paper focuses on the flipped views and the consistency
 them, and lag-or-margin is an add-on (tracker: Decisions D12). The method and every result are
 unchanged; only what the paper leads with changes. The frozen paper in BACFR/paper is untouched.
 
+PolypGen is closed (your decision of 13 November, tracker D14): no further PolypGen runs. It
+covers two networks, Polyp-PVT and PraNet-V2. HGM is reported on the five test sets.
+
 ## The story in three sentences
 
 1. A polyp network's mask changes when the image is flipped, and its accuracy drops on unseen
@@ -135,10 +138,10 @@ supervised in three orientations. At every pixel, the label then decides the dir
 pull: a flipped view is drawn toward the upright view, the one used at test time, where the
 upright view is more accurate, and the upright view is drawn toward the best flipped view where
 that view is more accurate. FCT adds no parameters and no test-time cost. Over six paired
-seeds, it improves Polyp-PVT, PraNet-V2 and HGM on unseen-centre data: by 1.65 and 3.61 Dice
-points on ETIS, and by 0.86 and 2.36 points on the six centres of PolypGen. Directing the
-consistency with the label more than doubles the agreement between its gradient and the
-supervised gradient.
+seeds, it improves Polyp-PVT, PraNet-V2 and HGM, most on unseen-centre data: Polyp-PVT and
+PraNet-V2 gain 1.65 and 3.61 Dice points on ETIS, and 0.86 and 2.36 points on the six centres
+of PolypGen. Directing the consistency with the label more than doubles the agreement between
+its gradient and the supervised gradient.
 
 ## Contributions
 
@@ -149,18 +152,18 @@ supervised gradient.
    consistency, with the test-time view as the default target and a lag-or-margin add-on. No
    parameters, no test-time cost, and nothing to tune.
 3. **Evidence with paired seeds.** Three networks from three architecture families, six paired
-   seeds each, with 95% intervals: gains concentrated on unseen centres (ETIS and the six
-   PolypGen centres), a layer-by-layer comparison (longer training, random flips, flipped
+   seeds each, with 95% intervals: gains concentrated on unseen centres (ETIS for all three,
+   the six PolypGen centres for two), a layer-by-layer comparison (longer training, random flips, flipped
    views, plain consistency, label direction, lag-or-margin), and the gradient measurement of
    Fact 2.
 
-## Statement of novelty for the submission form (481 of the 500 characters allowed)
+## Statement of novelty for the submission form (487 of the 500 characters allowed)
 
 Consistency losses make the views of an image agree without asking which view is right. In
 supervised training the label knows. FCT lets the label decide, pixel by pixel, which flip view
 of a network is pulled toward which, with the test-time view as default. It adds no parameters
-or test-time cost and improves transformer, CNN and Mamba polyp networks on unseen centres
-(ETIS, PolypGen) over six paired seeds. Main significance: methodological novelty, validated
+or test-time cost and improves transformer, CNN and Mamba polyp networks over six paired seeds,
+most on unseen centres (ETIS, PolypGen). Main significance: methodological novelty, validated
 across centres.
 
 ## The method in the story's words (matches the code)
@@ -190,9 +193,9 @@ Code and run names: layers 1 and 2 are `--fct_weit 5 --fct_up 1` (S3RELUP); with
 |---|---|---|
 | The usual consistency target is the less accurate view on 44% of pixels | Counters in the training logs (Fact 1) | Have |
 | First label-decided direction between the views of one network | Novelty check, 12 and 13 Nov | Have; repeat before submission |
-| FCT improves each network, most on unseen centres | Polyp-PVT: five-set +0.52 [+0.15, +0.90], ETIS +1.65 [+0.88, +2.42], PolypGen +0.86 [+0.37, +1.34]. PraNet-V2: five-set +1.68 [+0.69, +2.67], ETIS +3.61 [+0.23, +6.99], PolypGen +2.36 [+1.00, +3.71], all six centres up | Have for two networks; HGM in progress |
+| FCT improves each network, most on unseen centres | Polyp-PVT: five-set +0.52 [+0.15, +0.90], ETIS +1.65 [+0.88, +2.42], PolypGen +0.86 [+0.37, +1.34]. PraNet-V2: five-set +1.68 [+0.69, +2.67], ETIS +3.61 [+0.23, +6.99], PolypGen +2.36 [+1.00, +3.71], all six centres up | Have for two networks; HGM in progress (five test sets only) |
 | The label's direction more than doubles the gradient agreement | Fact 2 | Have |
-| Lag-or-margin is an add-on: FCT works with or without it | Without it: five-set +0.34 [+0.10, +0.57], ETIS +1.40. With it: +0.52, +1.65. Its own share: +0.18 [−0.38, +0.74] | Have on the five sets; PolypGen without the add-on to score (inference only) |
+| Lag-or-margin is an add-on: FCT works with or without it | Without it: five-set +0.34 [+0.10, +0.57], ETIS +1.40. With it: +0.52, +1.65. Its own share: +0.18 [−0.38, +0.74] | Have (five test sets) |
 | Label-directed against plain consistency, in Dice | Plain consistency (`s3f`) at six seeds | To run; the stage exists |
 | More than flip augmentation | Vanilla with random flips (item 13). Also ASGNet, whose recipe already has random flips: ETIS +1.69 [+0.08, +3.30] | To run; ASGNet is your call (O1) |
 | More than extra training | Vanilla for three times the epochs | Queued |
@@ -220,8 +223,8 @@ who finds it unaided will read it as overclaiming.
 |---|---|
 | Figure 1 | The three views; at one pixel, the label ranks them and the arrows run from the less accurate view to the more accurate one |
 | Table 1 | Five test sets, three networks: vanilla and FCT, gain with 95% interval |
-| Table 2 | PolypGen, six centres and pooled, three networks |
-| Table 3 | Layer by layer on Polyp-PVT: vanilla; three times the epochs; random flips; flipped views; + plain consistency; + consistency the label directs; + lag-or-margin (FCT). Columns: five-set mean, ETIS, PolypGen pooled, gradient agreement |
+| Table 2 | PolypGen, six centres and pooled, two networks (Polyp-PVT, PraNet-V2) |
+| Table 3 | Layer by layer on Polyp-PVT: vanilla; three times the epochs; random flips; flipped views; + plain consistency; + consistency the label directs; + lag-or-margin (FCT). Columns: five-set mean, ETIS, gradient agreement. PolypGen exists for the flipped views (+0.50) and FCT (+0.86) only: one sentence |
 | One sentence each | Other values of a, and one pull only; flip gap; results without best-epoch selection; C2; training cost |
 
 ## Credit, and what not to claim
@@ -242,12 +245,11 @@ Do not claim:
 
 | # | Run | Why the story needs it | Cost |
 |---|---|---|---|
-| 1 | HGM, vanilla and FCT (in progress on your machine) | The third network. Its runs must start from ImageNet backbone weights: see O6 | Yours |
+| 1 | HGM, vanilla and FCT, five test sets (in progress on your machine) | The third network. Its runs must start from ImageNet backbone weights: see O6 | Yours |
 | 2 | Vanilla with random flips (item 13) | None of the three networks trains with flips in its default recipe, so "is this flip augmentation?" is the first question a reviewer will ask | ~14 GPU-h |
-| 3 | Plain consistency, `s3f`, six seeds, plus PolypGen | The one row that shows what the label's direction changes in Dice | ~25 GPU-h |
+| 3 | Plain consistency, `s3f`, six seeds | The one row that shows what the label's direction changes in Dice | ~25 GPU-h |
 | 4 | Vanilla, three times the epochs | Rules out "just more training" | Queued |
-| 5 | PolypGen for S3RELUP (layers 1 and 2) | The row "without the add-on" on unseen centres | Inference only |
-| 6 | Flipped views alone and plain consistency on PraNet-V2 | FCT's gain is three times larger there, so the layers are more likely to separate | ~20 GPU-h, two new stages |
+| 5 | Flipped views alone and plain consistency on PraNet-V2 | FCT's gain is three times larger there, so the layers are more likely to separate | ~20 GPU-h, two new stages |
 
 What run 3 does to the story:
 
