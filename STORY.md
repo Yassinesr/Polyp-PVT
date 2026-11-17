@@ -48,6 +48,11 @@ Each layer against vanilla, Polyp-PVT, six paired seeds, Dice points:
 Lag-or-margin adds +0.18 [−0.38, +0.74] on the five-set mean. That is within noise, which
 fits its role as an add-on: FCT works with or without it.
 
+None of this is extra training. Vanilla trained three times as long, as many supervised passes
+as FCT's three views, gains nothing: +0.00 [−0.48, +0.48]. FCT beats that compute-matched
+vanilla by +0.52 [+0.08, +0.96] on the five-set mean (5 of 6 seeds) and by +2.13
+[+0.90, +3.35] on ETIS (6 of 6). Record: results/COMPUTE_CONTROL_1288.md.
+
 ## What changes from the last story
 
 | | Last story | This story |
@@ -198,7 +203,7 @@ Code and run names: layers 1 and 2 are `--fct_weit 5 --fct_up 1` (S3RELUP); with
 | Lag-or-margin is an add-on: FCT works with or without it | Without it: five-set +0.34 [+0.10, +0.57], ETIS +1.40. With it: +0.52, +1.65. Its own share: +0.18 [−0.38, +0.74] | Have (five test sets) |
 | Label-directed against plain consistency, in Dice | Plain consistency (`s3f`) at six seeds | To run; the stage exists |
 | More than flip augmentation | Vanilla with random flips (item 13). Also ASGNet, whose recipe already has random flips: ETIS +1.69 [+0.08, +3.30] | To run; ASGNet is your call (O1) |
-| More than extra training | Vanilla for three times the epochs | Queued |
+| More than extra training | Vanilla trained three times as long: +0.00 [−0.48, +0.48] over vanilla. FCT beats it by +0.52 [+0.08, +0.96], ETIS +2.13 [+0.90, +3.35] | Have |
 | Nothing to tune | Five-set gain +0.33 to +0.52 for a = 0.5, 1, 1.5, 2 and without the add-on. PolypGen +0.81 to +1.00 for the four values of a, every interval above 0 | Have |
 | No test-time cost; training costs 3.6× (Polyp-PVT), 3.3× (PraNet-V2) | Timing from the logs | Have |
 
@@ -211,7 +216,9 @@ Code and run names: layers 1 and 2 are `--fct_weit 5 --fct_up 1` (S3RELUP); with
 - Lag-or-margin adds +0.18 [−0.38, +0.74].
 - Layers 2 and 3 together add +0.16 [−0.30, +0.62] on the five-set mean and +0.36
   [−0.40, +1.12] on PolypGen.
-- The flip gap falls from 12.5% to 7.8% with the views alone, and to 7.5% with FCT.
+- The flip gap falls from 12.5% to 7.8% with the views alone, and to 7.5% with FCT. (The
+  six-seed flip-gap rows for the views alone are in commit d6a8000afa; 0ed072411 took them out of
+  flip_gap.tsv.)
 
 So the story claims the Dice gains for FCT as a whole. For the label's direction it claims the
 design and its effect on the gradient. The paper should say this in one sentence; a reviewer
@@ -248,8 +255,9 @@ Do not claim:
 | 1 | HGM, vanilla and FCT, five test sets (in progress on your machine) | The third network. Its runs must start from ImageNet backbone weights: see O6 | Yours |
 | 2 | Vanilla with random flips (item 13) | None of the three networks trains with flips in its default recipe, so "is this flip augmentation?" is the first question a reviewer will ask | ~14 GPU-h |
 | 3 | Plain consistency, `s3f`, six seeds | The one row that shows what the label's direction changes in Dice | ~25 GPU-h |
-| 4 | Vanilla, three times the epochs | Rules out "just more training" | Queued |
-| 5 | Flipped views alone and plain consistency on PraNet-V2 | FCT's gain is three times larger there, so the layers are more likely to separate | ~20 GPU-h, two new stages |
+| 4 | Flipped views alone and plain consistency on PraNet-V2 | FCT's gain is three times larger there, so the layers are more likely to separate | ~20 GPU-h, two new stages |
+
+Done since the first version: vanilla trained three times as long (above).
 
 What run 3 does to the story:
 
