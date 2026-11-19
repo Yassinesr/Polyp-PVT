@@ -202,7 +202,7 @@ Code and run names: layers 1 and 2 are `--fct_weit 5 --fct_up 1` (S3RELUP); with
 | The label's direction more than doubles the gradient agreement | Fact 2 | Have |
 | Lag-or-margin is an add-on: FCT works with or without it | Without it: five-set +0.34 [+0.10, +0.57], ETIS +1.40. With it: +0.52, +1.65. Its own share: +0.18 [−0.38, +0.74] | Have (five test sets) |
 | Label-directed against plain consistency, in Dice | Plain consistency (`s3f`) at six seeds | To run; the stage exists |
-| More than flip augmentation | Vanilla with random flips (item 13). Also ASGNet, whose recipe already has random flips: ETIS +1.69 [+0.08, +3.30] | To run; ASGNet is your call (O1) |
+| More than flip augmentation | Vanilla with random flips (item 13) | To run |
 | More than extra training | Vanilla trained three times as long: +0.00 [−0.48, +0.48] over vanilla. FCT beats it by +0.52 [+0.08, +0.96], ETIS +2.13 [+0.90, +3.35] | Have |
 | Nothing to tune | Five-set gain +0.33 to +0.52 for a = 0.5, 1, 1.5, 2 and without the add-on. PolypGen +0.81 to +1.00 for the four values of a, every interval above 0 | Have |
 | No test-time cost; training costs 3.6× (Polyp-PVT), 3.3× (PraNet-V2) | Timing from the logs | Have |

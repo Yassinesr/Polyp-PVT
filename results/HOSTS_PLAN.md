@@ -1,5 +1,7 @@
 # New host for the main body: plan, fixed before any run (2026-11-10)
 
+**Update, 2026-11-19.** ASGNet is dropped from the paper.
+
 **Update, 2026-11-13.** The SAM2-UNet runs (six seeds, both arms) were discarded, and HGM (Hybrid Graph
 Mamba, MICCAI 2025) takes its place as the third host, to test FCT on a Mamba-based network. Reason
 given for discarding them: the runs crashed, and the model was judged not suited to FCT. (Commit d6a8000afa added
