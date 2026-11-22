@@ -6,7 +6,8 @@
 #  as SAM2UNET_S3LMUP_<name>_s<seed> and compared with the existing same-seed
 #  SAM2UNET_VANILLA_s<seed> (trained with SAM2UNET_AMP=1, as these are).
 #
-#  Waits until .gpu0_free exists (the GPU 0 job before it is done), then runs seed by seed,
+#  Takes an exclusive lock on /tmp/gpu0.lock and waits until GPU 0 has under 1000 MiB in use
+#  (the GPU 0 job before it is done), then runs seed by seed,
 #  every candidate on seed 1 before any on seed 2, so a partial queue still compares like
 #  with like. A run whose log finished and whose maps are complete is skipped, so
 #  re-running resumes. About 3 h per run.

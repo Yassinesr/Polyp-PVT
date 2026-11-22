@@ -84,7 +84,8 @@
 #  Usage: bash run_1288.sh vanilla | vanilla_aug | vanilla_3x | s3 | s3f | s3fup | s3relup | s3up | s3err | s3gate | s3bgate | s3rel | s3sig
 #                          | s3sigy | s3lm | s3lmup | s3lmup_a05 | s3lmup_a10 | s3lmup_a15
 #                          | s3lmup_a30 | pranetv2_vanilla | pranetv2_s3lmup | asgnet_vanilla
-#                          | asgnet_s3lmup | sam2unet_vanilla | sam2unet_s3lmup | sam2unet_tune | gate
+#                          | asgnet_s3lmup | sam2unet_vanilla | sam2unet_s3lmup | sam2unet_tune
+#                          | hgm_vanilla | hgm_s3lmup | gate
 #         SEED=1 bash run_1288.sh s3err
 #         bash run_1288.sh all            # = s3err
 # =============================================================================
