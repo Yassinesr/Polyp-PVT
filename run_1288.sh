@@ -84,7 +84,7 @@
 #  Usage: bash run_1288.sh vanilla | vanilla_aug | vanilla_3x | s3 | s3f | s3fup | s3relup | s3up | s3err | s3gate | s3bgate | s3rel | s3sig
 #                          | s3sigy | s3lm | s3lmup | s3lmup_a05 | s3lmup_a10 | s3lmup_a15
 #                          | s3lmup_a30 | pranetv2_vanilla | pranetv2_s3lmup | asgnet_vanilla
-#                          | asgnet_s3lmup | sam2unet_vanilla | sam2unet_s3lmup | gate
+#                          | asgnet_s3lmup | sam2unet_vanilla | sam2unet_s3lmup | sam2unet_tune | gate
 #         SEED=1 bash run_1288.sh s3err
 #         bash run_1288.sh all            # = s3err
 # =============================================================================
@@ -125,7 +125,7 @@ infer_arm() {   # name, checkpoint files...
 }
 
 FCT="--orientation_aug 0 --fct 1 --fct_sup 1 --fct_all_scales 1 --fct_loss bce --fct_weight 0.5 \
-     --fct_sync_rng 1 --grad_diag 50"
+     --fct_sync_rng 1 --grad_diag 0"
 vanilla()     { train_arm PVT_VANILLA$SFX --orientation_aug 0 && infer_arm PVT_VANILLA$SFX PolypPVT; }
 vanilla_aug() { train_arm PVT_VANILLA_AUG$SFX --orientation_aug 1 && infer_arm PVT_VANILLA_AUG$SFX PolypPVT; }
 vanilla_3x()  { train_arm PVT_VANILLA_3X$SFX --orientation_aug 0 --epoch 298 --eval_every 3 --lr_decay_epoch 0 \
@@ -166,6 +166,28 @@ sam2unet_vanilla() { HOSTARGS="$SAM2UNET"; train_arm SAM2UNET_VANILLA$SFX $HOSTA
                        && infer_arm SAM2UNET_VANILLA$SFX PolypPVT; }
 sam2unet_s3lmup()  { HOSTARGS="$SAM2UNET"; train_arm SAM2UNET_S3LMUP$SFX $HOSTARGS $SAM2UNET_RECIPE $FCT --fct_weit 8 --fct_up 1 \
                        && infer_arm SAM2UNET_S3LMUP$SFX PolypPVT; }
+# sam2unet_tune: sam2unet_s3lmup with extra FCT flags, under its own run name, for tuning FCT on
+# SAM2-UNet without touching the runs above. TUNE names the variant, TUNE_ARGS holds the flags
+# (later flags win in argparse, so they override $FCT), for example
+#   SEED=1 SAM2UNET_AMP=1 TUNE=W10 TUNE_ARGS="--fct_weight 1.0" bash run_1288.sh sam2unet_tune
+#   -> SAM2UNET_S3LMUP_W10_s1
+sam2unet_tune()    { [ -n "${TUNE:-}" ] || { echo "!! sam2unet_tune needs TUNE=<name> (and TUNE_ARGS)"; exit 1; }
+                     HOSTARGS="$SAM2UNET"; local n="SAM2UNET_S3LMUP_${TUNE}$SFX"
+                     train_arm "$n" $HOSTARGS $SAM2UNET_RECIPE $FCT --fct_weit 8 --fct_up 1 ${TUNE_ARGS:-} \
+                       && infer_arm "$n" PolypPVT; }
+HGM="--host hgm --host_root ${HGM_ROOT:-../HGM}"
+# HGM recipe (its MyTrain.py): Adam 3e-5, 200 epochs (--epoch 201: the loop runs 1..200),
+# 352 px, multi-scale {0.75,1,1.25}, gradient clip 0.5; the x0.1 steps at epochs 50/100/150
+# come from HGMHost.lr_schedule. Its batch 16 was on two GPUs: HGM_BATCH (default 16) runs as
+# HGM_ACCUM parts on one 12 GB card. HGM needs mamba_ssm, which only builds in the hgm conda
+# env (CUDA 11.8), so its stages put that env's python first on PATH.
+HGM_PY="${HGM_ENV:-/home/yassine/anaconda3/envs/hgm}/bin"
+HGM_RECIPE="--optimizer Adam --lr 3e-5 --batchsize ${HGM_BATCH:-16} --accum ${HGM_ACCUM:-2} --epoch ${HGM_EPOCH:-201} \
+            --clip 0.5 --multiscale 1 --drop_path 0.1 --amp ${HGM_AMP:-0}"
+hgm_vanilla() { ( PATH="$HGM_PY:$PATH"; HOSTARGS="$HGM"; train_arm HGM_VANILLA$SFX $HOSTARGS $HGM_RECIPE \
+                  && infer_arm HGM_VANILLA$SFX PolypPVT ); }
+hgm_s3lmup()  { ( PATH="$HGM_PY:$PATH"; HOSTARGS="$HGM"; train_arm HGM_S3LMUP$SFX $HOSTARGS $HGM_RECIPE $FCT --fct_weit 8 --fct_up 1 \
+                  && infer_arm HGM_S3LMUP$SFX PolypPVT ); }
 gate()        { local ck=""; for a in S3F S3F_EMA S3W05 S3ERR; do [ -d "./model_pth/$a" ] && ck="$ck ./model_pth/$a"; done
                 python gate_share.py --pth_path $ck; }
 
@@ -196,6 +218,9 @@ case "$STAGE" in
   asgnet_s3lmup)    asgnet_s3lmup ;;
   sam2unet_vanilla) sam2unet_vanilla ;;
   sam2unet_s3lmup)  sam2unet_s3lmup ;;
+  sam2unet_tune)    sam2unet_tune ;;
+  hgm_vanilla)      hgm_vanilla ;;
+  hgm_s3lmup)       hgm_s3lmup ;;
   gate)        gate; exit 0 ;;
   all)         s3err ;;
   *)           echo "unknown stage: $STAGE"; exit 1 ;;

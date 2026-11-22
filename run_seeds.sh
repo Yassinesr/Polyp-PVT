@@ -54,7 +54,7 @@
 #      CUDA_VISIBLE_DEVICES=1 ARMS="sam2unet_vanilla sam2unet_s3lmup" bash run_seeds.sh 4 5 6 2>&1 | tee seeds_sam2unet_b.out
 #      python seed_summary.py --seeds 1 2 3 4 5 6 --arms SAM2UNET_VANILLA SAM2UNET_S3LMUP
 # =============================================================================
-set -u
+set -u -o pipefail
 SEEDS="${*:-2 3 4 5 6}"
 ARMS="${ARMS:-vanilla s3sig}"
 SETS="CVC-300 CVC-ClinicDB Kvasir CVC-ColonDB ETIS-LaribPolypDB"
@@ -73,6 +73,7 @@ vanilla_of() {   # run_1288.sh stage -> the vanilla run it is scored against
     pranetv2_*) echo PRANETV2_VANILLA ;;
     asgnet_*)   echo ASGNET_VANILLA ;;
     sam2unet_*) echo SAM2UNET_VANILLA ;;
+    hgm_*)      echo HGM_VANILLA ;;
     *)          echo PVT_VANILLA ;;
   esac
 }
