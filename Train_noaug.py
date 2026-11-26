@@ -1,6 +1,6 @@
 """Polyp-PVT trained on WHOLE IMAGES with the orientation-symmetry augmentation
-removed, so that flip-consistency training (FCT) and flip TTA can be measured
-against a baseline that does not already contain the symmetry they exploit.
+removed, so that flip-consistency training (FCT) can be measured against a
+baseline that does not already contain the symmetry it exploits.
 
 WHY THIS FILE EXISTS
 --------------------
@@ -8,21 +8,20 @@ On the patch-refinement side of this project the ladder was:
 
     A  orientation aug OFF, no FCT
     B  orientation aug OFF, FCT consistency-only
-    C  = B scored with 4-view flip TTA
 
 This script is the whole-image analogue, so the two settings can be compared
 directly and the question "are patches or full images more suitable for
-FCT+TTA?" can be answered with the same ladder on both sides.
+FCT?" can be answered with the same ladder on both sides.
 
 WHAT WAS REMOVED, AND WHY
 -------------------------
 The stock repo has TWO independent sources of augmentation. Only one of them
-clashes with FCT+TTA.
+clashes with FCT.
 
 1. ORIENTATION (utils/dataloader.py, gated on `augmentations == 'True'`):
       RandomRotation(90), RandomVerticalFlip(0.5), RandomHorizontalFlip(0.5)
-   This is exactly the symmetry group FCT constrains and flip-TTA averages
-   over. It CLASHES and is removed here: this script hard-wires the loader to
+   This is exactly the symmetry group FCT constrains. It CLASHES and is
+   removed here: this script hard-wires the loader to
    the no-augmentation branch and does not expose a flag to re-enable it.
 
    Worth knowing: in the stock Train.py this augmentation is ALREADY OFF by
@@ -37,13 +36,13 @@ clashes with FCT+TTA.
    Also note the stock transform is RandomRotation(90), which in torchvision
    means a uniform random angle in [-90, +90] degrees -- not a 90-degree step.
    That trains continuous rotation invariance, a strictly larger group than
-   the D4 group flip-TTA averages over.
+   the flips FCT works with.
 
 2. MULTI-SCALE (Train.py, `size_rates = [0.75, 1, 1.25]`):
    Each batch is run at three scales with a backward pass each. This is NOT
    gated by --augmentation and is always on in the stock recipe. It acts on
    the SCALE axis, which is orthogonal to the flip/rotation symmetry that
-   FCT+TTA target, so it does NOT clash and is KEPT ON by default. It is
+   FCT targets, so it does NOT clash and is KEPT ON by default. It is
    exposed as `--multiscale 0|1` so it can be ablated separately -- turning it
    off changes the recipe substantially and will lower the baseline, so keep
    it on unless scale is the thing being studied.
@@ -106,7 +105,7 @@ USAGE
   arm B/C (no-aug + FCT, consistency-only):
     python Train_noaug.py --fct 1 --fct_weight 0.5 --train_save ./model_pth/PolypPVT_noaug_fct/
 
-Then score with Test.py (no TTA) and Test_tta.py (4-view flip TTA).
+Then save the maps with Test_maps.py and score them with eval_dice.py.
 
 FCT v2 (seq mode only; every default keeps the v1 behaviour above)
 -----------------------------------------------------------------
@@ -121,9 +120,9 @@ See run_fct_v2.sh for the arms, and flip_gap.py for the equivariance check.
 
 OTHER MODELS (--host)
 ---------------------
-  --host pranetv2|asgnet --host_root <clone> trains PraNet-V2 or ASGNet in place of
-  Polyp-PVT, with that paper's own loss; everything FCT does is unchanged.
-  See hosts.py, setup_hosts.sh and the pranetv2_* / asgnet_* stages of run_1288.sh.
+  --host pranetv2|asgnet|sam2unet --host_root <clone> trains PraNet-V2, ASGNet or
+  SAM2-UNet in place of Polyp-PVT, with that paper's own loss; everything FCT does is
+  unchanged. See hosts.py, setup_hosts.sh and the host stages of run_1288.sh.
 """
 import os
 import copy
@@ -171,7 +170,7 @@ def _prob(model, x):
     """Inference-equivalent probability map: sigmoid of the host's prediction, P1 + P2.
 
     Test.py predicts with `P1 + P2`, so the consistency term is applied to the
-    same quantity TTA will later average. Constraining anything else would be
+    quantity the model is scored on. Constraining anything else would be
     constraining a signal that never reaches the output.
     """
     return torch.sigmoid(HOST.logit(HOST.heads(model(x))))
@@ -537,7 +536,7 @@ def train(train_loader, model, optimizer, epoch, opt, state):
     model.train()
     v2 = _fct_v2(opt)
     scaler = state.get('scaler')
-    size_rates = [0.75, 1, 1.25] if opt.multiscale else [1]
+    size_rates = opt.size_rates or ([0.75, 1, 1.25] if opt.multiscale else [1])
     loss_record = AvgMeter()
     cons_record = AvgMeter()
 
@@ -642,11 +641,13 @@ def train(train_loader, model, optimizer, epoch, opt, state):
 
             if scaler is not None:
                 scaler.unscale_(optimizer)      # clip on real, unscaled grads
-                clip_gradient(optimizer, opt.clip)
+                if opt.clip > 0:
+                    clip_gradient(optimizer, opt.clip)
                 scaler.step(optimizer)
                 scaler.update()
             else:
-                clip_gradient(optimizer, opt.clip)
+                if opt.clip > 0:
+                    clip_gradient(optimizer, opt.clip)
                 optimizer.step()
             if state.get('ema') is not None:
                 _ema_update(state['ema'], model, opt.ema, state['ema_step'])
@@ -713,18 +714,23 @@ if __name__ == '__main__':
     parser.add_argument('--epoch', type=int, default=100)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--optimizer', type=str, default='AdamW',
-                        help='AdamW (weight decay 1e-4, the stock recipe), Adam (no weight '
-                             'decay, as in PraNet-V2) or anything else for SGD')
+                        help='AdamW (weight decay --weight_decay, 1e-4 in the stock recipe), Adam '
+                             '(no weight decay, as in PraNet-V2) or anything else for SGD')
+    parser.add_argument('--weight_decay', type=float, default=1e-4,
+                        help='weight decay of AdamW and SGD: 1e-4, the stock recipe; SAM2-UNet '
+                             'uses 5e-4. Adam has none')
     parser.add_argument('--host', type=str, default='polyppvt', choices=sorted(HOSTS),
                         help='the model to train: polyppvt (this repo), pranetv2 (PraNet-V2, '
-                             'Res2Net-50) or asgnet (ASGNet, PVTv2-b3), each with its paper\'s '
-                             'loss. See hosts.py')
+                             'Res2Net-50), asgnet (ASGNet, PVTv2-b3) or sam2unet (SAM2-UNet, '
+                             'Hiera-L), each with its paper\'s loss. See hosts.py')
     parser.add_argument('--host_root', type=str, default=None,
-                        help='your clone of the host\'s code (default ../PraNet-V2/binary_seg '
-                             'or ../ASGNet/ASGNet_26_TCSVT; setup_hosts.sh makes them)')
+                        help='your clone of the host\'s code (default ../PraNet-V2/binary_seg, '
+                             '../ASGNet/ASGNet_26_TCSVT or ../SAM2-UNet; setup_hosts.sh makes them)')
     parser.add_argument('--batchsize', type=int, default=16)
     parser.add_argument('--trainsize', type=int, default=352)
-    parser.add_argument('--clip', type=float, default=0.5)
+    parser.add_argument('--clip', type=float, default=0.5,
+                        help='clamp every gradient element to [-clip, clip] (stock 0.5); 0 = no '
+                             'clipping, as in SAM2-UNet\'s train.py')
     parser.add_argument('--decay_rate', type=float, default=0.1)
     parser.add_argument('--decay_epoch', type=int, default=50)
     parser.add_argument('--train_path', type=str, default='./dataset/TrainDataset/')
@@ -732,9 +738,13 @@ if __name__ == '__main__':
     parser.add_argument('--train_save', type=str, default='./model_pth/PolypPVT_noaug/')
 
     # Scale augmentation: orthogonal to the flip group, so it does not clash
-    # with FCT+TTA. On by default because it is part of the stock recipe.
+    # with FCT. On by default because it is part of the stock recipe.
     parser.add_argument('--multiscale', type=int, default=1,
                         help='1 = stock [0.75,1,1.25] multi-scale, 0 = single scale')
+    parser.add_argument('--size_rates', type=float, nargs='+', default=None,
+                        help='other multi-scale rates, in place of --multiscale; must include 1 '
+                             '(SAM2-UNet\'s polyp recipe: 1 1.25). Each rate is its own step, '
+                             'resized to round(trainsize * rate / 32) * 32 as in the stock loop')
 
     # Orientation augmentation. Off by default -- this script exists to remove
     # it. The flag is here for ONE purpose: testing whether the ~0.018 gap
@@ -744,8 +754,8 @@ if __name__ == '__main__':
     # command line even though its default silently does not.
     #
     # Turning this ON re-enables RandomRotation(90) + V/H flips, which is
-    # exactly the symmetry group FCT constrains and TTA averages over. Do not
-    # combine it with --fct and then report the result as an FCT measurement.
+    # exactly the symmetry group FCT constrains. Do not combine it with --fct
+    # and then report the result as an FCT measurement.
     parser.add_argument('--orientation_aug', type=int, default=0,
                         help='1 = re-enable RandomRotation + V/H flips (diagnostic only)')
 
@@ -797,9 +807,10 @@ if __name__ == '__main__':
                              '(always toward y), weighted like one flip\'s term (lam / n_flips). '
                              'Costs one forward pass without gradients per flip. FCT v2 only')
     parser.add_argument('--fct_flip_pull', type=int, default=1, choices=[0, 1],
-                        help='0 = no pull on the flipped views: with --fct_up 1 only the upright '
-                             'pull remains (an ablation of FCT\'s components). The flipped views '
-                             'stay supervised per --fct_sup. Default 1')
+                        help='0 = the flipped views are not pulled to the upright view: with '
+                             '--fct_up 1 only the pull of the upright view to the best flipped view '
+                             'remains (an ablation of FCT\'s components). The flipped views stay '
+                             'supervised per --fct_sup. Default 1')
     parser.add_argument('--fct_lm_a', type=float, default=2.0,
                         help='lag-or-margin factor a (--fct_weit 8): where a flipped view beats '
                              'the upright, w = max(0, 1 - a|p_o - y|). 2 (default) is the only '
@@ -855,6 +866,13 @@ if __name__ == '__main__':
     parser.add_argument('--save_every_epoch', type=int, default=0,
                         help='1 = keep a checkpoint per epoch (~100MB x epochs). '
                              'Default keeps only best + last')
+    parser.add_argument('--lr_decay_epoch', type=int, default=None,
+                        help='the stock loop calls adjust_lr(..., 0.1, 200), which from epoch 200 on '
+                             'multiplies the rate by 0.1 EVERY epoch (it compounds), so the rate '
+                             'is ~0 a few epochs later. Harmless for the 99-epoch runs, which never '
+                             'get there; a longer run must choose: 0 = constant rate, as every '
+                             '99-epoch run had; N = the stock call with N in place of 200. '
+                             'Default: the stock 200, refused for runs that reach it')
     parser.add_argument('--eval_every', type=int, default=1,
                         help='evaluate the 5 test sets every N epochs')
     parser.add_argument('--accum', type=int, default=1,
@@ -875,6 +893,8 @@ if __name__ == '__main__':
         parser.error('--fct_lm_a only applies to the lag-or-margin weight (--fct_weit 8)')
     if opt.fct_lm_a < 0:
         parser.error('--fct_lm_a must be >= 0')
+    if opt.size_rates is not None and 1.0 not in opt.size_rates:
+        parser.error('--size_rates must include 1: the loss is logged and the FCT warmup counted there')
     if opt.fct_weit and not opt.fct_sup:
         print('!! --fct_weit without --fct_sup 1: the weight is built from the GT, so '
               'labels reach the otherwise unsupervised flipped views.')
@@ -916,11 +936,11 @@ if __name__ == '__main__':
 
     params = model.parameters()
     if opt.optimizer == 'AdamW':
-        optimizer = torch.optim.AdamW(params, opt.lr, weight_decay=1e-4)
+        optimizer = torch.optim.AdamW(params, opt.lr, weight_decay=opt.weight_decay)
     elif opt.optimizer == 'Adam':
         optimizer = torch.optim.Adam(params, opt.lr)
     else:
-        optimizer = torch.optim.SGD(params, opt.lr, weight_decay=1e-4, momentum=0.9)
+        optimizer = torch.optim.SGD(params, opt.lr, weight_decay=opt.weight_decay, momentum=0.9)
     print(optimizer)
 
     image_root = '{}/images/'.format(opt.train_path)
@@ -950,7 +970,11 @@ if __name__ == '__main__':
             print('  !! --orientation_aug with --fct: the augmentation supplies the very')
             print('     symmetry the consistency term constrains. Not an FCT measurement.')
         print('  photometric               : OFF  (this repo has none)')
-    print('  multi-scale [0.75,1,1.25] : {}'.format('ON' if opt.multiscale else 'OFF'))
+    if opt.size_rates:
+        print('  multi-scale rates         : {}  (--size_rates)'.format(
+            ' '.join('{:g}'.format(r) for r in opt.size_rates)))
+    else:
+        print('  multi-scale [0.75,1,1.25] : {}'.format('ON' if opt.multiscale else 'OFF'))
     if drop_path is None:
         print('  stochastic depth          : none in this model')
     else:
@@ -972,15 +996,28 @@ if __name__ == '__main__':
     print('  batchsize {}{}  trainsize {}  amp {}  epochs {} (loop runs 1..{})'.format(
         opt.batchsize, ' as {} parts (--accum)'.format(opt.accum) if opt.accum > 1 else '',
         opt.trainsize, bool(opt.amp), opt.epoch, opt.epoch - 1))
-    # adjust_lr is called with a hardcoded decay_epoch of 200, so for any run
+    # adjust_lr is called with decay_epoch 200 (--lr_decay_epoch), so for any run
     # shorter than that decay = 0.1**0 = 1 and the multiply is a no-op: the
-    # learning rate never changes. --decay_rate and --decay_epoch are parsed
+    # learning rate never changes. Past it the multiply compounds every epoch. --decay_rate and --decay_epoch are parsed
     # but never read. Both are stock behaviour, left alone so the recipe stays
     # faithful to the released one, but stated here so nobody assumes a
     # schedule that is not running. A host can bring its paper's schedule instead.
     lr_schedule = HOST.lr_schedule(optimizer, opt)
-    print('  lr {} {}'.format(opt.lr, HOST.lr_note if lr_schedule else
-                              'CONSTANT (no decay; --decay_rate/--decay_epoch are inert)'))
+    lr_decay_epoch = 200 if opt.lr_decay_epoch is None else opt.lr_decay_epoch
+    if lr_schedule is None and opt.lr_decay_epoch is None and opt.epoch - 1 >= lr_decay_epoch:
+        raise SystemExit('--epoch {} runs past epoch 200, where the stock adjust_lr starts multiplying '
+                         'the rate by 0.1 every epoch: training would stop there. Pass --lr_decay_epoch 0 '
+                         'for a constant rate (as every 99-epoch run had), or --lr_decay_epoch N to keep '
+                         'the stock call from epoch N.'.format(opt.epoch))
+    if lr_schedule is not None:
+        print('  lr {} {}'.format(opt.lr, HOST.lr_note))
+    elif lr_decay_epoch > 0 and opt.epoch - 1 >= lr_decay_epoch:
+        print('  lr {} constant to epoch {}, then x0.1 every epoch (stock adjust_lr, --lr_decay_epoch {})'.format(
+            opt.lr, lr_decay_epoch - 1, lr_decay_epoch))
+    else:
+        print('  lr {} CONSTANT (no decay; --decay_rate/--decay_epoch are inert)'.format(opt.lr))
+    if opt.clip <= 0:
+        print('  gradient clipping: off (--clip {:g})'.format(opt.clip))
     if opt.fct and _fct_v2(opt):
         print('  FCT v2: flipped views supervised {}, consistency {} x {:.3f}{}, vflip {}, '
               'warmup {}, all scales {}, sub {}, grad_diag {}'.format(
@@ -992,7 +1029,8 @@ if __name__ == '__main__':
                    8: ' (lag-or-margin, a = {:g})'.format(opt.fct_lm_a)}[opt.fct_weit],
                   bool(opt.fct_vflip), opt.fct_warmup_iters, bool(opt.fct_all_scales),
                   opt.fct_sub or 'full batch', opt.grad_diag or 'off'))
-        print('  FCT pulls: on the flipped views {}, on the upright view (--fct_up) {}'.format(
+        print('  FCT pulls: flipped views to the upright view {}, upright view to the best flipped view '
+              '(--fct_up) {}'.format(
             'ON' if opt.fct_flip_pull else 'OFF', 'ON' if opt.fct_up else 'OFF'))
         if opt.fct_weight <= 0:
             print('  (consistency OFF: this is the supervised-flips control)')
@@ -1016,10 +1054,10 @@ if __name__ == '__main__':
         for _p in state['ema'].parameters():
             _p.requires_grad_(False)
     for epoch in range(1, opt.epoch):
-        if lr_schedule is None:
-            adjust_lr(optimizer, opt.lr, epoch, 0.1, 200)
-        else:
+        if lr_schedule is not None:
             lr_schedule(epoch)
+        elif lr_decay_epoch > 0:
+            adjust_lr(optimizer, opt.lr, epoch, 0.1, lr_decay_epoch)
         train(train_loader, model, optimizer, epoch, opt, state)
     # run_seeds.sh looks for this line to tell a finished run from an interrupted one.
     print('=== training finished: {} epochs, best five-set mean {:.4f}'.format(

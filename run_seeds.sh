@@ -43,8 +43,18 @@
 #      CUDA_VISIBLE_DEVICES=0 ARMS="asgnet_vanilla asgnet_s3lmup" bash run_seeds.sh 1 2 3 2>&1 | tee seeds_asgnet_a.out
 #      CUDA_VISIBLE_DEVICES=1 ARMS="asgnet_vanilla asgnet_s3lmup" bash run_seeds.sh 4 5 6 2>&1 | tee seeds_asgnet_b.out
 #      python seed_summary.py --seeds 1 2 3 4 5 6 --arms ASGNET_VANILLA ASGNET_S3LMUP
+#  The compute control: vanilla trained three times as long (about 6.5 h a run), then FCT
+#  against it and it against vanilla:
+#      CUDA_VISIBLE_DEVICES=0 ARMS="vanilla_3x" bash run_seeds.sh 1 2 3 2>&1 | tee seeds_3x_a.out
+#      CUDA_VISIBLE_DEVICES=1 ARMS="vanilla_3x" bash run_seeds.sh 4 5 6 2>&1 | tee seeds_3x_b.out
+#      python seed_summary.py --seeds 1 2 3 4 5 6 --arms PVT_VANILLA_3X S3LMUP
+#      python seed_summary.py --seeds 1 2 3 4 5 6 --arms PVT_VANILLA PVT_VANILLA_3X
+#  and SAM2-UNet the same way:
+#      CUDA_VISIBLE_DEVICES=0 ARMS="sam2unet_vanilla sam2unet_s3lmup" bash run_seeds.sh 1 2 3 2>&1 | tee seeds_sam2unet_a.out
+#      CUDA_VISIBLE_DEVICES=1 ARMS="sam2unet_vanilla sam2unet_s3lmup" bash run_seeds.sh 4 5 6 2>&1 | tee seeds_sam2unet_b.out
+#      python seed_summary.py --seeds 1 2 3 4 5 6 --arms SAM2UNET_VANILLA SAM2UNET_S3LMUP
 # =============================================================================
-set -u
+set -u -o pipefail
 SEEDS="${*:-2 3 4 5 6}"
 ARMS="${ARMS:-vanilla s3sig}"
 SETS="CVC-300 CVC-ClinicDB Kvasir CVC-ColonDB ETIS-LaribPolypDB"
@@ -53,6 +63,7 @@ run_name() {   # run_1288.sh stage -> run name without the seed suffix
   case "$1" in
     vanilla)     echo PVT_VANILLA ;;
     vanilla_aug) echo PVT_VANILLA_AUG ;;
+    vanilla_3x)  echo PVT_VANILLA_3X ;;
     *)           echo "${1^^}" ;;
   esac
 }
@@ -61,6 +72,8 @@ vanilla_of() {   # run_1288.sh stage -> the vanilla run it is scored against
   case "$1" in
     pranetv2_*) echo PRANETV2_VANILLA ;;
     asgnet_*)   echo ASGNET_VANILLA ;;
+    sam2unet_*) echo SAM2UNET_VANILLA ;;
+    hgm_*)      echo HGM_VANILLA ;;
     *)          echo PVT_VANILLA ;;
   esac
 }

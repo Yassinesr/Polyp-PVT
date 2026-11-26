@@ -34,7 +34,7 @@ import torch
 
 from hosts import HOSTS, get_host
 from utils.dataloader import test_dataset
-from Test_tta import resolve_checkpoint
+from Test_maps import resolve_checkpoint
 
 TESTSETS = ['CVC-300', 'CVC-ClinicDB', 'Kvasir', 'CVC-ColonDB', 'ETIS-LaribPolypDB']
 FLIPS = {'h': [3], 'v': [2]}          # NCHW: dim 3 = width (horizontal), dim 2 = height

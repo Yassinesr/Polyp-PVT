@@ -32,7 +32,7 @@ import torch.nn.functional as F
 
 from lib.pvt import PolypPVT
 from utils.dataloader import test_dataset
-from Test_tta import resolve_checkpoint
+from Test_maps import resolve_checkpoint
 
 
 @torch.no_grad()

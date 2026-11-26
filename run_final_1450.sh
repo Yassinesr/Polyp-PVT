@@ -64,7 +64,7 @@ infer_arm() {
       last)         tag="${arm}_last" ;;
     esac
     echo "=== infer $arm/$ck -> result_map/$tag"
-    python Test_tta.py --pth_path "$d/$ck.pth" --views 1 --save_root "./result_map/$tag"
+    python Test_maps.py --pth_path "$d/$ck.pth" --save_root "./result_map/$tag"
   done
   python flip_gap.py --pth_path "$d/PolypPVT_ema.pth" "$d/PolypPVT.pth" --out flip_gap.tsv
 }

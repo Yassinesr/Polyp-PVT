@@ -1,6 +1,6 @@
 """Per-image Dice across runs: is FCT's ColonDB / CVC-300 shortfall systematic, or run noise?
 
-Reads the maps Test_tta.py saved (result_map/<run>/<set>/<image>.png) and the ground truth, so it
+Reads the maps Test_maps.py saved (result_map/<run>/<set>/<image>.png) and the ground truth, so it
 needs no GPU and no checkpoints. Every image is scored with eval_dice.py, the Python port of the
 MATLAB evaluation the Polyp-PVT paper used:
 
