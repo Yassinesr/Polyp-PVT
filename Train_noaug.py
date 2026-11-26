@@ -321,21 +321,40 @@ def test(model, path, dataset):
     return DSC / num1
 
 
-def evaluate_all(model, test_root):
-    """Score the five benchmark sets and return (per-set dict, mean).
+def evaluate_all(model, test_root, val_path=None):
+    """Score the five benchmark sets and return (per-set dict, selection score).
 
-    The stock script selects its best checkpoint on a sixth split it calls
-    'test', i.e. `<test_root>/test/`, which is absent from the standard
-    TestDataset layout and crashes at the first epoch. Here the five-set mean
-    is used when that directory does not exist, so training does not die an
-    hour in; if the directory IS present the original behaviour is preserved
-    exactly.
+    When val_path is set (--val_path, default dataset/ValidationDataset) the
+    best checkpoint is selected on that held-out split, never on the five test
+    sets. run_1288.sh blocks if dataset/TestDataset/test exists, so no test-set
+    leakage was possible in any committed run; that guard is kept.
     """
     scores = {}
     for name in TESTSETS:
         scores[name] = test(model, test_root, name)
-    if os.path.isdir(os.path.join(test_root, 'test')):
-        return scores, test(model, test_root, 'test')
+    if val_path and os.path.isdir(val_path):
+        # score the validation set directly (images/ and masks/ inside val_path)
+        image_root = os.path.join(val_path, 'images') + '/'
+        gt_root    = os.path.join(val_path, 'masks')  + '/'
+        if not os.path.isdir(gt_root):
+            gt_root = os.path.join(val_path, 'gt') + '/'
+        model.eval()
+        num = len(os.listdir(gt_root))
+        loader = test_dataset(image_root, gt_root, 352)
+        dsc = 0.0
+        for _ in range(num):
+            image, gt, _ = loader.load_data()
+            gt = np.asarray(gt, np.float32)
+            gt /= (gt.max() + 1e-8)
+            image = image.cuda()
+            res = HOST.logit(HOST.heads(model(image)))
+            res = F.upsample(res, size=gt.shape, mode='bilinear', align_corners=False)
+            res = res.sigmoid().data.cpu().numpy().squeeze()
+            res = (res - res.min()) / (res.max() - res.min() + 1e-8)
+            smooth = 1
+            inp = res.reshape(-1); tgt = gt.reshape(-1)
+            dsc += float('{:.4f}'.format((2*(inp*tgt).sum()+smooth)/(inp.sum()+tgt.sum()+smooth)))
+        return scores, dsc / num
     return scores, sum(scores.values()) / len(scores)
 
 
@@ -683,7 +702,7 @@ def train(train_loader, model, optimizer, epoch, opt, state):
 
     if opt.eval_every > 1 and epoch % opt.eval_every != 0:
         return
-    scores, meandice = evaluate_all(model, opt.test_path)
+    scores, meandice = evaluate_all(model, opt.test_path, opt.val_path)
     for name, d in scores.items():
         logging.info('epoch: {}, dataset: {}, dice: {}'.format(epoch, name, d))
         print(name, ': ', d)
@@ -696,7 +715,7 @@ def train(train_loader, model, optimizer, epoch, opt, state):
         logging.info('#' * 30 + 'best:{}'.format(meandice))
 
     if ema is not None:
-        scores, meandice = evaluate_all(ema, opt.test_path)
+        scores, meandice = evaluate_all(ema, opt.test_path, opt.val_path)
         for name, d in scores.items():
             logging.info('EMA epoch: {}, dataset: {}, dice: {}'.format(epoch, name, d))
             print('EMA', name, ': ', d)
@@ -729,6 +748,9 @@ if __name__ == '__main__':
     parser.add_argument('--decay_epoch', type=int, default=50)
     parser.add_argument('--train_path', type=str, default='./dataset/TrainDataset/')
     parser.add_argument('--test_path', type=str, default='./dataset/TestDataset/')
+    parser.add_argument('--val_path', type=str, default='./dataset/ValidationDataset',
+                        help='held-out validation set for checkpoint selection; '
+                             'set empty string to fall back to five-set mean')
     parser.add_argument('--train_save', type=str, default='./model_pth/PolypPVT_noaug/')
 
     # Scale augmentation: orthogonal to the flip group, so it does not clash

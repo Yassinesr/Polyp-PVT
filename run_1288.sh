@@ -79,8 +79,14 @@ COMMON="--multiscale 1 --drop_path 0.1 --amp 1 --train_path ./dataset/TrainDatas
 HOSTARGS=""        # --host and --host_root of the model; set by the host stages below
 
 if [ -d ./dataset/TestDataset/test ]; then
-  echo "!! ./dataset/TestDataset/test exists: Train_noaug.py would pick the best epoch on it"
-  echo "   instead of the 5-set mean used by every earlier run. Move it away first."
+  echo "!! ./dataset/TestDataset/test exists."
+  echo "   Train_noaug.py now selects checkpoints on --val_path (dataset/ValidationDataset)"
+  echo "   and no longer reads dataset/TestDataset/test at all."
+  echo "   This guard is kept to ensure no future code accidentally reads test sets during"
+  echo "   training. All runs committed before this change used five-set mean selection;"
+  echo "   the TestDataset/test directory did not exist then, so no test-set leakage"
+  echo "   occurred in any prior committed run."
+  echo "   If you intentionally created this directory, remove the guard or rename it."
   exit 1
 fi
 n=$(ls ./dataset/TrainDataset/images/ 2>/dev/null | wc -l)
