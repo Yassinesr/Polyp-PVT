@@ -8,6 +8,9 @@
 #    --orientation_aug 0 --fct 1 --fct_sup 1 --fct_all_scales 1 --fct_loss bce
 #    --fct_sync_rng 1 --grad_diag 50 --fct_weit 8 --fct_up 1 --fct_weight <lambda>
 #  (--grad_diag 50 as in the reference runs; it also logs |g_cons|/|g_sup| for each lambda.)
+#  Checkpoint selection: the reference runs kept the epoch with the best five-set test mean.
+#  Train_noaug.py versions that have --val_path (default ./dataset/ValidationDataset) select on
+#  the validation set instead, so this script passes --val_path "" whenever the flag exists.
 #  Runs: S3LMUP_L025_s<seed> (0.25), S3LMUP_L10_s<seed> (1.0), S3LMUP_L20_s<seed> (2.0).
 #  Each run: Train_noaug.py -> model_pth/<run>/ and logs_<run>.txt, then Test_maps.py on
 #  PolypPVT.pth -> result_map/<run>/, then flip_gap.py -> one row appended to flip_gap.tsv.
@@ -37,6 +40,8 @@ LAMBDAS="${LAMBDAS:-L025:0.25 L10:1.0 L20:2.0}"      # name:value, the run is S3
 SETS="CVC-300 CVC-ClinicDB Kvasir CVC-ColonDB ETIS-LaribPolypDB"
 COMMON="--multiscale 1 --drop_path 0.1 --amp 1 --train_path ./dataset/TrainDataset/"
 FCT="--orientation_aug 0 --fct 1 --fct_sup 1 --fct_all_scales 1 --fct_loss bce --fct_sync_rng 1 --grad_diag 50 --fct_weit 8 --fct_up 1"
+VAL=()                                   # same selection rule as the reference runs (see above)
+grep -q "'--val_path'" Train_noaug.py && VAL=(--val_path "")
 
 summary() {
   local nv run
@@ -93,9 +98,9 @@ for seed in $SEEDS; do
     wait_gpu
     echo "=== $(date '+%F %T')  train $arm (lambda $lam)"
     if [ "$DRY_RUN" = 1 ]; then
-      echo "+ python Train_noaug.py $COMMON --seed $seed $FCT --fct_weight $lam --train_save ./model_pth/$arm/ 2>&1 | tee logs_$arm.txt"
+      echo "+ python Train_noaug.py $COMMON --seed $seed $FCT --fct_weight $lam ${VAL[@]+--val_path \"\"} --train_save ./model_pth/$arm/ 2>&1 | tee logs_$arm.txt"
     else
-      python Train_noaug.py $COMMON --seed "$seed" $FCT --fct_weight "$lam" --train_save "./model_pth/$arm/" 2>&1 | tee "logs_$arm.txt"
+      python Train_noaug.py $COMMON --seed "$seed" $FCT --fct_weight "$lam" ${VAL[@]+"${VAL[@]}"} --train_save "./model_pth/$arm/" 2>&1 | tee "logs_$arm.txt"
       if ! grep -q "^=== training finished" "logs_$arm.txt"; then
         echo "!! $arm did not finish (see logs_$arm.txt); no maps, moving on"; continue
       fi
