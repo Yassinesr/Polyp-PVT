@@ -323,10 +323,11 @@ def test(model, path, dataset):
 def evaluate_all(model, test_root, val_path=None):
     """Score the five benchmark sets and return (per-set dict, selection score).
 
-    When val_path is set (--val_path, default dataset/ValidationDataset) the
-    best checkpoint is selected on that held-out split, never on the five test
-    sets. run_1288.sh blocks if dataset/TestDataset/test exists, so no test-set
-    leakage was possible in any committed run; that guard is kept.
+    By default (--val_path '') the selection score is the mean of the five
+    test sets, the rule of every reported run. When --val_path names an
+    existing folder (images/ + masks/), the best checkpoint is selected on that
+    folder instead. run_1288.sh still refuses to run if dataset/TestDataset/test
+    exists.
     """
     scores = {}
     for name in TESTSETS:
@@ -754,9 +755,10 @@ if __name__ == '__main__':
     parser.add_argument('--decay_epoch', type=int, default=50)
     parser.add_argument('--train_path', type=str, default='./dataset/TrainDataset/')
     parser.add_argument('--test_path', type=str, default='./dataset/TestDataset/')
-    parser.add_argument('--val_path', type=str, default='./dataset/ValidationDataset',
-                        help='held-out validation set for checkpoint selection; '
-                             'set empty string to fall back to five-set mean')
+    parser.add_argument('--val_path', type=str, default='',
+                        help='folder (images/ + masks/) to select the best checkpoint on, '
+                             'e.g. ./dataset/ValidationDataset; default empty = the mean of '
+                             'the five test sets, the rule of every reported run')
     parser.add_argument('--train_save', type=str, default='./model_pth/PolypPVT_noaug/')
 
     # Scale augmentation: orthogonal to the flip group, so it does not clash

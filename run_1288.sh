@@ -99,8 +99,8 @@ HOSTARGS=""        # --host and --host_root of the model; set by the host stages
 
 if [ -d ./dataset/TestDataset/test ]; then
   echo "!! ./dataset/TestDataset/test exists."
-  echo "   Train_noaug.py now selects checkpoints on --val_path (dataset/ValidationDataset)"
-  echo "   and no longer reads dataset/TestDataset/test at all."
+  echo "   Train_noaug.py selects checkpoints on the five-set test mean (or on --val_path"
+  echo "   when it is given) and no longer reads dataset/TestDataset/test at all."
   echo "   This guard is kept to ensure no future code accidentally reads test sets during"
   echo "   training. All runs committed before this change used five-set mean selection;"
   echo "   the TestDataset/test directory did not exist then, so no test-set leakage"
