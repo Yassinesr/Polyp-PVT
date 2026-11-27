@@ -4,6 +4,8 @@ Runs from `run_lambda.sh`, pushed in 92a99ba86 (branch `lambda-results`): `S3LMU
 
 ## Status: 11 of the 18 runs must be rerun before the official numbers count
 
+**Update, 2026-11-27.** Checkpoint selection stays on the five-set test mean for every arm (supervisor's decision; tracker D15). The 11 runs are being rerun with `run_lambda.sh` at 4ebeb3fd4 or later (tracker Q9).
+
 The server's `Train_noaug.py` already had the validation-set selection of 3eb44b9e3. It scores `dataset/ValidationDataset` (162 images) and keeps the best epoch on it whenever that folder exists, unless `--val_path ""` is passed. The `run_lambda.sh` that ran was e1f078f73, which did not pass that flag; 4ebeb3fd4 added it afterwards. In an epoch selected on the validation set, the printed `mean:` is the validation score (0.88-0.93), not the average of the five test sets printed above it. That shows which rule each run used:
 
 | Selection rule | Runs |
@@ -46,7 +48,7 @@ Reading:
 
 ## What selecting the epoch on the test sets adds
 
-For each of the 11 runs selected on the validation set, the logs give the five-set mean at the saved epoch and at the best five-set epoch. Picking the epoch on the test sets adds **0.89 ± 0.45 Dice points** to the five-set mean (range 0.41 to 1.51). This is larger than FCT's gain over vanilla (0.52).
+For each of the 11 runs selected on the validation set, the logs give the five-set mean at the saved epoch and at the best five-set epoch. Picking the epoch on the test sets adds **0.89 ± 0.45 Dice points** to the five-set mean (range 0.41 to 1.51).
 
 | Run | Saved epoch (validation) | Five-set at saved | Best five-set (epoch) | Difference |
 |---|---|---|---|---|
@@ -62,7 +64,6 @@ For each of the 11 runs selected on the validation set, the logs give the five-s
 | L20_s5 | 75 | 86.56 | 87.18 (61) | 0.62 |
 | L20_s6 | 97 | 86.69 | 87.67 (53) | 0.98 |
 
-How much the same choice adds for vanilla is not known: the vanilla logs have no validation scores. Under validation selection for every arm, FCT's gain over vanilla has not been measured.
 
 ## To finish the sweep
 
