@@ -202,7 +202,7 @@ Code and run names: layers 1 and 2 are `--fct_weit 5 --fct_up 1` (S3RELUP); with
 | The label's direction more than doubles the gradient agreement | Fact 2 | Have |
 | Lag-or-margin is an add-on: FCT works with or without it | Without it: five-set +0.34 [+0.10, +0.57], ETIS +1.40. With it: +0.52, +1.65. Its own share: +0.18 [−0.38, +0.74] | Have (five test sets) |
 | Label-directed against plain consistency, in Dice | Plain consistency (`s3f`) at six seeds | To run; the stage exists |
-| More than flip augmentation | Vanilla with random flips (item 13) | To run |
+| More than flip augmentation | Vanilla trained three times as long with rotation-and-flip augmentation (`--orientation_aug 1`, PVT_VANILLA_3X_FLIP): five-set −0.11 [−0.39, +0.17] over vanilla; it gains on ETIS (+1.75) and loses on ColonDB (−0.98). FCT beats it on the five-set mean by +0.63 [+0.11, +1.15], 5 of 6 seeds; ETIS level (−0.10 [−1.12, +0.91]) | Have (rotation and flips; the flip-only control is the views alone, S3) |
 | More than extra training | Vanilla trained three times as long: +0.00 [−0.48, +0.48] over vanilla. FCT beats it by +0.52 [+0.08, +0.96], ETIS +2.13 [+0.90, +3.35] | Have |
 | Nothing to tune | Five-set gain +0.33 to +0.52 for a = 0.5, 1, 1.5, 2 and without the add-on. PolypGen +0.81 to +1.00 for the four values of a, every interval above 0 | Have |
 | No test-time cost; training costs 3.6× (Polyp-PVT), 3.3× (PraNet-V2) | Timing from the logs | Have |
@@ -216,9 +216,9 @@ Code and run names: layers 1 and 2 are `--fct_weit 5 --fct_up 1` (S3RELUP); with
 - Lag-or-margin adds +0.18 [−0.38, +0.74].
 - Layers 2 and 3 together add +0.16 [−0.30, +0.62] on the five-set mean and +0.36
   [−0.40, +1.12] on PolypGen.
-- The flip gap falls from 12.5% to 7.8% with the views alone, and to 7.5% with FCT. (The
-  six-seed flip-gap rows for the views alone are in commit d6a8000afa; 0ed072411 took them out of
-  flip_gap.tsv.)
+- The flip gap falls from 12.5% to 7.8% with the views alone, and to 7.5% with FCT. The
+  rotation-and-flip baseline is lower still, 7.1%, so a low flip gap is not specific to FCT.
+  (The six-seed rows for the views alone are back in flip_gap.tsv since 9b2678e29.)
 
 So the story claims the Dice gains for FCT as a whole. For the label's direction it claims the
 design and its effect on the gradient. The paper should say this in one sentence; a reviewer
